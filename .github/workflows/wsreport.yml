@@ -16,7 +16,7 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: wsreport-public
@@ -33,16 +33,33 @@ jobs:
         run: |
           test -n "$DASH_PASS" || { echo "Нет секрета DASH_PASS"; exit 1; }
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:DASH_PASS -in state.enc | tar xzf - --no-same-permissions
+          if [ -f managers.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:DASH_PASS -in managers.enc | tar xzf - --no-same-permissions
+          fi
           chmod -R u+rwX config.json output
-      - name: Выгрузка из Worksection
+      - name: Выгрузка из Worksection (текущий отчёт)
         run: python wsreport.py
+      - name: Выгрузка для дашборда менеджеров
+        id: mgr
+        continue-on-error: true
+        run: python wsmanagers.py
       - name: Зашифровать и сохранить
         run: |
           tar czf - config.json output/history.json output/emp_history.json output/archive output/dash \
             | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:DASH_PASS -out state.enc
+          if [ -d output/managers ]; then
+            tar czf - output/managers \
+              | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:DASH_PASS -out managers.enc
+          fi
           rm -rf output config.json
           git config user.name "wsreport-bot"
           git config user.email "wsreport-bot@users.noreply.github.com"
           git add state.enc
+          [ -f managers.enc ] && git add managers.enc
           git diff --cached --quiet || git commit -m "wsreport $(date +%F)"
           git push
+      - name: Ошибка выгрузки менеджеров
+        if: steps.mgr.outcome == 'failure'
+        run: |
+          echo "::error::wsmanagers.py завершился с ошибкой — текущий отчёт сохранён, данные менеджеров нет"
+          exit 1
