@@ -25,6 +25,7 @@ import wsreport as W
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONTACT_KEYS = ("контактна особа", "контактное лицо")
 RESULT_KEYS = ("результат по завданню", "результат по задаче")
+FINAL_TAG = "definitively closed"         # «⛔️Definitively closed» — как и PAID\CLOSE, означает полную оплату
 
 
 class RawWS:
@@ -192,7 +193,11 @@ def main():
         tg = tags_of(t)
         pay = next((x for x in tg if x in pay_names), "")
         stage = next((x for x in tg if x not in pay_names and x.upper() == x and any(ch.isalpha() for ch in x)), "")
-        s = category(stage, t.get("status"))
+        final = next((x for x in tg if FINAL_TAG in x.lower()), "")
+        if final and not stage.upper().startswith("CANCEL"):
+            stage, s = final, "PAID"      # Definitively closed = полная оплата, как PAID\CLOSE
+        else:
+            s = category(stage, t.get("status"))
         if s is None or s == "CLOSED":
             continue
         owner = t.get("user_to") or {}

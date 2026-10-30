@@ -659,7 +659,10 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
     # --- когорты: задачи какого месяца создания где сейчас (по направлениям)
     def stage_of(t):
         tags = list((t.get("tags") or {}).values()) if isinstance(t.get("tags"), dict) else list(t.get("tags") or [])
-        return next((x for x in tags if x not in pay_names and x.upper() == x and any(ch.isalpha() for ch in x)), "")
+        stage = next((x for x in tags if x not in pay_names and x.upper() == x and any(ch.isalpha() for ch in x)), "")
+        final = next((str(x) for x in tags if "definitively closed" in str(x).lower()), "")
+        return final if final and not stage.upper().startswith("CANCEL") else stage
+    is_paid = lambda stg: stg.upper().startswith("PAID") or "DEFINITIVELY CLOSED" in stg.upper()  # оба = полная оплата
     cohorts, backlog = {}, []
     mkey = month_start.isoformat()[:7]
     for t in tasks:
@@ -680,7 +683,7 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
             state = "open"
         elif stg.upper().startswith("DONE"):
             state = "done_wait"           # работа сдана, ждёт приёмки/оплаты
-        elif stg.upper().startswith("PAID"):
+        elif is_paid(stg):
             state = "paid"
         else:
             state = "closed"
