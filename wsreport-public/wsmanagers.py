@@ -161,6 +161,23 @@ def main():
             tasks[i] = merge(tasks.get(i, {}), dict(t))
     print("    задач всего: %d" % len(tasks))
 
+    # --- все проекты (чтобы закреплять за менеджерами и проекты без задач к закрытию)
+    projects = {}
+    for t in tasks.values():
+        n = (t.get("project") or {}).get("name") or ""
+        if n:
+            projects.setdefault(n, 0)
+            if str(t.get("status")).lower() != "done":
+                projects[n] += 1
+    try:
+        for pr in ws.call("get_projects").get("data", []) or []:
+            n = str(pr.get("name") or "").strip()
+            if n and str(pr.get("status") or "active").lower() not in ("archive", "archived", "done", "closed"):
+                projects.setdefault(n, 0)
+        print("    проектов (get_projects + задачи): %d" % len(projects))
+    except Exception as e:                # нет метода или нет файла в raw — берём проекты из задач
+        print("    get_projects недоступен (%s), проектов из задач: %d" % (e, len(projects)))
+
     # --- записи времени и часы по проектам
     ent, fact, staff_hours = {}, {}, {}
     pm_staff, pm_all = {}, {}
@@ -237,7 +254,8 @@ def main():
 
     files = {
         "tasks.json": {"generated": dt.datetime.now().isoformat(timespec="seconds"), "date": today.isoformat(),
-                       "cur": cur, "tasks": rows},
+                       "cur": cur, "tasks": rows,
+                       "projects": sorted([n, c] for n, c in projects.items())},
         "entries.json": entries,
         "pm.json": {"staff": rnd(pm_staff), "all": rnd(pm_all)},
         "months.json": months,
