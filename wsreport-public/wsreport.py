@@ -159,6 +159,31 @@ class Worksection:
 
 
 # ----------------------------------------------------------------- helpers
+
+TEAM_TAGS = {"ІТС", "ITC", "ІTC", "IТС"}     # «ІТС» — вид оплаты, не этап
+
+
+def pay_tags(cfg):
+    """Метки группы «Вид оплати» в Worksection: Оплачувана, Не оплачувана, Гарантія, ІТС."""
+    return [cfg["paid_tag"], "Не оплачувана"] + list(cfg["guarantee_tags"]) + ["ІТС", "ITC"]
+
+
+def stage_from_tags(tags, pay_names):
+    """Этап задачи по тегам Worksection: тег большими буквами (DONE, IN PROGRESS (ІТС), PAID\\CLOSE…),
+    кроме меток вида оплаты (в т.ч. «ІТС»). «⛔️Definitively closed» — финальный этап (полная оплата),
+    важнее остальных, кроме CANCELLED."""
+    tags = [str(x.get("title") if isinstance(x, dict) else x) for x in tags]
+    stage = next((x for x in tags if x not in pay_names and x.strip() not in TEAM_TAGS
+                  and x.upper() == x and any(ch.isalpha() for ch in x)), "")
+    final = next((x for x in tags if "definitively closed" in x.lower()), "")
+    return final if final and not stage.upper().startswith("CANCEL") else stage
+
+
+def is_paid_stage(stage):
+    """PAID\\CLOSE (с суффиксом (ІТС) или без) и Definitively closed — полная оплата."""
+    s = (stage or "").upper()
+    return s.startswith("PAID") or "DEFINITIVELY CLOSED" in s
+
 def parse_date(v):
     if not v:
         return None
@@ -469,12 +494,12 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
     def link(page):
         return (base + page) if page and str(page).startswith("/") else page
     emp_tasks = []
-    pay_names = [cfg["paid_tag"], "Не оплачувана"] + list(cfg["guarantee_tags"])
+    pay_names = pay_tags(cfg)
 
     def task_row(t, owner, state, deadline, closed):
         tags = list((t.get("tags") or {}).values()) if isinstance(t.get("tags"), dict) else list(t.get("tags") or [])
         pay = next((x for x in tags if x in pay_names), "")
-        stage = next((x for x in tags if x not in pay_names and x.upper() == x and any(ch.isalpha() for ch in x)), "")
+        stage = stage_from_tags(tags, pay_names)
         if state == "open":
             delay = (today - deadline).days if deadline and deadline < today else 0
         else:
@@ -659,10 +684,8 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
     # --- когорты: задачи какого месяца создания где сейчас (по направлениям)
     def stage_of(t):
         tags = list((t.get("tags") or {}).values()) if isinstance(t.get("tags"), dict) else list(t.get("tags") or [])
-        stage = next((x for x in tags if x not in pay_names and x.upper() == x and any(ch.isalpha() for ch in x)), "")
-        final = next((str(x) for x in tags if "definitively closed" in str(x).lower()), "")
-        return final if final and not stage.upper().startswith("CANCEL") else stage
-    is_paid = lambda stg: stg.upper().startswith("PAID") or "DEFINITIVELY CLOSED" in stg.upper()  # оба = полная оплата
+        return stage_from_tags(tags, pay_names)
+    is_paid = is_paid_stage               # PAID\CLOSE и Definitively closed = полная оплата
     cohorts, backlog = {}, []
     mkey = month_start.isoformat()[:7]
     for t in tasks:
