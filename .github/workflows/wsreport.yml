@@ -17,6 +17,9 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: wsreport-public
     env:
       TZ: Europe/Kyiv
       WS_API_KEY: ${{ secrets.WS_API_KEY }}
