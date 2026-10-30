@@ -32,7 +32,8 @@ jobs:
       - name: Расшифровать настройки и архив
         run: |
           test -n "$DASH_PASS" || { echo "Нет секрета DASH_PASS"; exit 1; }
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:DASH_PASS -in state.enc | tar xzf -
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:DASH_PASS -in state.enc | tar xzf - --no-same-permissions
+          chmod -R u+rwX config.json output
       - name: Выгрузка из Worksection
         run: python wsreport.py
       - name: Зашифровать и сохранить
