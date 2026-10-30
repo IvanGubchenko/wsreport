@@ -700,16 +700,16 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
             continue
         closed = parse_date(t.get("date_closed"))
         is_closed = str(t.get("status", "")).lower() == "done" and closed and closed <= today
-        if is_closed and closed < month_start and not stg.upper().startswith("DONE"):
-            continue                      # закрыта и оплачена/без этапа до этого месяца — не хвост и не закрытие месяца
-        if not is_closed:
-            state = "open"
-        elif stg.upper().startswith("DONE"):
-            state = "done_wait"           # работа сдана, ждёт приёмки/оплаты
-        elif is_paid(stg):
+        # Факт оплаты — только этап PAID\CLOSE или ⛔️Definitively closed. Метки вида оплаты
+        # (Оплачувана, Не оплачувана, Гарантія, ІТС) — тип задачи, а не факт оплаты.
+        if is_paid(stg):
             state = "paid"
+            if not is_closed or closed < month_start:
+                continue                  # оплачена до этого месяца — не хвост и не закрытие месяца
+        elif stg.upper().startswith("DONE") or is_closed:
+            state = "done_wait"           # сдана (DONE) или закрыта без этапа оплаты — ждёт приёмки/оплаты
         else:
-            state = "closed"
+            state = "open"
         hours = fact_by_task.get(str(t.get("id")), 0.0)
         cm = added.isoformat()[:7]
         key = (owner["department"], cm)
@@ -736,7 +736,8 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
                             "project": (t.get("project") or {}).get("name", ""),
                             "created": added.isoformat(), "created_month": cm,
                             "closed": closed.isoformat() if is_closed else None,
-                            "state": "Ждёт приёмки/оплаты (DONE)" if state == "done_wait" else (
+                            "state": ("Ждёт приёмки/оплаты (DONE)" if stg.upper().startswith("DONE") else
+                                      "Закрыта без PAID\\CLOSE") if state == "done_wait" else (
                                 "Приёмка клиентом" if stg.upper().startswith("TESTING BY CLIENT") else "В работе"),
                             "stage": stg, "age_days": (today - added).days, "hours": round(hours, 1),
                             "pay": next((x for x in (list((t.get("tags") or {}).values()) if isinstance(t.get("tags"), dict) else [])

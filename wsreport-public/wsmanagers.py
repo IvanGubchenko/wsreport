@@ -109,12 +109,12 @@ def category(stage, status):
     s = (stage or "").upper()
     if s.startswith("CANCEL"):
         return None
-    if s.startswith("PAID"):
-        return "PAID"
+    if s.startswith("PAID") or "DEFINITIVELY CLOSED" in s:
+        return "PAID"                     # факт оплаты — только PAID\CLOSE и Definitively closed
     if s.startswith("DONE"):
         return "DONE"
     if str(status).lower() == "done":
-        return "CLOSED"
+        return "DONE"                     # закрыта в Worksection без этапа оплаты — не оплачена, ждёт оплаты
     if s.startswith("TESTING BY CLIENT"):
         return "TESTING BY CLIENT"
     return "IN WORK"
