@@ -163,6 +163,11 @@ class Worksection:
 TEAM_TAGS = {"ІТС", "ITC", "ІTC", "IТС"}     # «ІТС» — вид оплаты, не этап
 
 
+RESULT_TAGS = ("З першого разу!", "Не здали!")      # группа меток «Результат сдачі»
+TYPE_TAGS = ("Функціонал", "Помилка", "Зміна вимог", "Аналітика/Консультація", "Технічна",
+             "Оптимізація/Оновлення", "Зміна дизайну", "Документація", "Пресейл", "Навчання")  # «Тип задачі»
+
+
 def pay_tags(cfg):
     """Метки группы «Вид оплати» в Worksection: Оплачувана, Не оплачувана, Гарантія, ІТС."""
     return [cfg["paid_tag"], "Не оплачувана"] + list(cfg["guarantee_tags"]) + ["ІТС", "ITC"]
@@ -500,6 +505,9 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
         tags = list((t.get("tags") or {}).values()) if isinstance(t.get("tags"), dict) else list(t.get("tags") or [])
         pay = next((x for x in tags if x in pay_names), "")
         stage = stage_from_tags(tags, pay_names)
+        tnames = [str(x.get("title") if isinstance(x, dict) else x) for x in tags]
+        result = next((x for x in tnames if x in RESULT_TAGS), "")
+        ttype = next((x for x in tnames if x in TYPE_TAGS), "")
         if state == "open":
             delay = (today - deadline).days if deadline and deadline < today else 0
         else:
@@ -513,7 +521,9 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
                 "closed": closed.isoformat() if closed else None, "delay_days": delay,
                 "plan_hours": round(plan, 1) if plan else None,
                 "fact_month": round(fact_by_task_month.get(str(t.get("id")), 0.0), 1),
-                "fact_total": round(fact_by_task.get(str(t.get("id")), 0.0), 1)}
+                "fact_total": round(fact_by_task.get(str(t.get("id")), 0.0), 1),
+                "created": (parse_date(t.get("date_added")) or today).isoformat(),
+                "result": result, "ttype": ttype}
 
     for t in tasks:
         added = parse_date(t.get("date_added"))
@@ -874,6 +884,7 @@ def export_dashboard(r, out, cfg):
             "closed_yesterday": e["closed_yesterday"], "closed_mtd": e["closed_mtd"],
             "on_time_rate": e["on_time_rate_mtd"], "open_tasks": e["open_tasks"], "overdue": e["overdue"],
             "max_overdue_days": e["max_overdue_days"],
+            "wd_next": e.get("wd_next"), "absent_next": e.get("absent_next"), "capacity_next": e.get("capacity_next"),
             "flags": ", ".join(f for f in e["flags"] if f != "норма по умолчанию")} for e in r["employees"]],
         "daily_hours": [dict(x, department=S(x["department"])) for x in r["daily_hours"]],
         "emp_daily": r["emp_daily"],
@@ -985,6 +996,26 @@ def load_config():
     return cfg
 
 
+def add_next_capacity(report, ws, users, today, cfg):
+    """Загрузка на следующий месяц: рабочие дни, отпуска/больничные из графика и ёмкость в часах."""
+    ns = (today.replace(day=1) + dt.timedelta(days=32)).replace(day=1)
+    ne = dt.date(ns.year, ns.month, calendar.monthrange(ns.year, ns.month)[1])
+    hol = set(cfg.get("holidays") or [])
+    total = workdays(ns, ne, hol)
+    try:
+        sch = load_schedule(ws, users, ns, ne)
+    except Exception:
+        sch = {}
+    by_name = {u.get("name"): k for k, u in users.items()}
+    for e in report.get("employees", []):
+        k = by_name.get(e.get("name"))
+        off = {d for d in (sch.get(k) or {}).get("off", set()) if d[:7] == ns.isoformat()[:7]}
+        off_wd = len([d for d in off if dt.date.fromisoformat(d).weekday() < 5 and d not in hol])
+        e["wd_next"] = max(0, total - off_wd)
+        e["absent_next"] = off_wd
+        e["capacity_next"] = round(e["norm"] * e["wd_next"] / total, 1) if e.get("norm") and total else None
+
+
 def main():
     ap = argparse.ArgumentParser(description="Worksection -> статистика IT-команд")
     ap.add_argument("--date", help="дата отчёта YYYY-MM-DD (по умолчанию сегодня)")
@@ -1023,6 +1054,7 @@ def main():
     print("    отпуска/больничные в графике: %d сотр." % sum(1 for v in schedule.values() if v["off"]))
 
     report = build_report(users, costs, tasks, today, cfg, schedule, closed_month)
+    add_next_capacity(report, ws, users, today, cfg)
     with open(os.path.join(out, "report.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
     with open(os.path.join(out, "report_%s.json" % today.isoformat()), "w", encoding="utf-8") as f:
