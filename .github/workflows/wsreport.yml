@@ -2,8 +2,8 @@ name: wsreport
 
 on:
   schedule:
-    # 23:07 UTC = 01:07 по Киеву зимой (02:07 летом), в ночь на будний день
-    - cron: "7 23 * * 0-4"
+    # 23:07 UTC = 01:07 по Киеву зимой (02:07 летом), каждую ночь, включая выходные
+    - cron: "7 23 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -37,6 +37,13 @@ jobs:
             openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:DASH_PASS -in managers.enc | tar xzf - --no-same-permissions
           fi
           chmod -R u+rwX config.json output
+      - name: Итог прошлого месяца (1–3 числа)
+        run: |
+          if [ "$(date +%-d)" -le 3 ]; then
+            PREV=$(date -d "$(date +%Y-%m-01) -1 day" +%Y-%m)
+            echo "Пересчитываю итог $PREV (часы, списанные в последние дни месяца)"
+            python wsreport.py --month "$PREV"
+          fi
       - name: Выгрузка из Worksection (текущий отчёт)
         run: python wsreport.py
       - name: Выгрузка для дашборда менеджеров
