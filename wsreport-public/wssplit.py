@@ -14,6 +14,7 @@
 Режимы: dry — ничего не меняет, только считает; send — создаёт подзадачи (и переносит записи).
 В лог — только количества (репозиторий публичный). Подробный план и журнал — в split/ (шифруется в split.enc).
 Повторный запуск по той же задаче не создаёт дублей: обработанные записи помнятся в журнале.
+Если задача закрыта в Worksection, она временно открывается; после переноса подзадачи и сама задача закрываются.
 """
 import argparse
 import datetime as dt
@@ -179,6 +180,20 @@ def main():
         print("  период записей: %s … %s" % (months[0], months[-1]))
 
     created = moved = errors = 0
+    was_closed = str(task.get("status") or "").lower() == "done"
+    new_subs = []
+    reopened = False
+    if a.mode == "send" and plan and was_closed:
+        # в закрытую задачу нельзя добавить подзадачи и время: временно открываем, потом закрываем обратно
+        try:
+            ws.call("reopen_task", id_task=tid)
+            reopened = True
+            print("  задача была закрыта — временно открыта")
+        except W.WSError as e:
+            print("  ошибка reopen_task: %s" % str(e)[:200])
+            print("Задача закрыта, открыть не удалось")
+            plan = []
+            errors += 1
     if a.mode == "send":
         for p in plan:
             g = jt["groups"].get(p["key"])
@@ -202,6 +217,7 @@ def main():
                     print("  post_task не вернул id")
                     continue
                 created += 1
+                new_subs.append(sub_id)
                 jt["groups"][p["key"]] = {"id": sub_id, "title": p["title"], "costs": []}
             g = jt["groups"][p["key"]]
             for c in p["costs"]:
@@ -254,6 +270,20 @@ def main():
             except W.WSError as e:
                 errors += 1
                 print("  ошибка post_comment: %s" % str(e)[:200])
+        if reopened:
+            # подзадачи закрываем вместе с задачей, затем закрываем саму задачу
+            for sid in new_subs:
+                try:
+                    ws.call("complete_task", id_task=sid)
+                except W.WSError as e:
+                    errors += 1
+                    print("  ошибка complete_task (подзадача): %s" % str(e)[:200])
+            try:
+                ws.call("complete_task", id_task=tid)
+                print("  задача снова закрыта")
+            except W.WSError as e:
+                errors += 1
+                print("  ошибка complete_task (задача осталась открытой): %s" % str(e)[:200])
         print("  создано подзадач                 %d" % created)
         print("  попросили заполнить описание     %d" % asked)
         print("  перенесено записей               %d" % moved)
