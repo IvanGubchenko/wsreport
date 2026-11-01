@@ -4,7 +4,7 @@
   fill    — открытая задача без типа оплаты / без этапа / без оценки, или по ней уже есть часы,
             а этап PLANNED или пустой → автору задачи (если автора нет — исполнителю).
   overdue — открытая задача, срок прошёл, а этап ещё до сдачи → исполнителю и руководителю направления.
-  pause   — задача на PAUSE больше 15 дней → исполнителю.
+  pause   — задача на PAUSE больше 15 дней → автору задачи (если автора нет — исполнителю).
   done    — задача в DONE больше 15 дней без PAID\\CLOSE → менеджеру проекта (ответственный проекта в Worksection).
 
 Пока проблема не исправлена и ничего не менялось — напоминание повторяется каждые 3 рабочих дня.
@@ -146,7 +146,10 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
                                         "text": "Привіт! Строк задачі минув (%s). Онови, будь ласка, строк або етап задачі."
                                         % due.strftime("%d.%m")}
         if "pause" in rules and is_open and in_team and su.startswith("PAUSE") and stage_days > PAUSE_DAYS:
-            active["pause:" + tid] = {"tid": tid, "rule": "pause", "who": [email], "sig": stage,
+            author = ((t.get("user_from") or {}).get("email") or "").lower()
+            if not author or author == "noone":
+                author = email                    # автора нет — пишем исполнителю
+            active["pause:" + tid] = {"tid": tid, "rule": "pause", "who": [author], "sig": stage,
                                       "text": "Ця задача вже більше %d днів в статусі PAUSE, потрібно її або взяти "
                                               "в роботу, або відмінити." % PAUSE_DAYS}
         if "done" in rules and in_team and su.startswith("DONE") and stage_days > DONE_DAYS:
