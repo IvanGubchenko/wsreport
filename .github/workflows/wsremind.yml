@@ -19,6 +19,10 @@ on:
         description: "Проверка: номер задачи — комментарий только в неё (без фильтров)"
         required: false
         default: ""
+      nudge:
+        description: "Порядок в задачах (fill/overdue/pause/done): dry / test / send (пусто — из переменной NUDGE_MODE, по умолчанию dry)"
+        required: false
+        default: ""
       date:
         description: "Проверка: «сегодняшняя» дата YYYY-MM-DD (с mode=dry — посмотреть, сколько напоминаний будет в этот день)"
         required: false
@@ -50,6 +54,7 @@ jobs:
       REMIND_TEST_EMAIL: ${{ vars.REMIND_TEST_EMAIL }}
       REMIND_FROM: ${{ vars.REMIND_FROM }}
       REMIND_TASK: ${{ inputs.task }}
+      NUDGE_MODE: ${{ inputs.nudge || vars.NUDGE_MODE || 'dry' }}
       REMIND_CLEANUP: ${{ inputs.cleanup }}
       REMIND_DATE: ${{ inputs.date }}
     steps:
