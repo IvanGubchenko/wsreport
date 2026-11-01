@@ -2,7 +2,7 @@
 
 Правила (каждое — комментарий в задаче с упоминанием нужных людей):
   fill    — открытая задача без типа оплаты / без этапа / без оценки, или по ней уже есть часы,
-            а этап PLANNED или пустой → исполнителю.
+            а этап PLANNED или пустой → автору задачи (если автора нет — исполнителю).
   overdue — открытая задача, срок прошёл, а этап ещё до сдачи → исполнителю и руководителю направления.
   pause   — задача на PAUSE больше 15 дней → исполнителю.
   done    — задача в DONE больше 15 дней без PAID\\CLOSE → менеджеру проекта (ответственный проекта в Worksection).
@@ -130,7 +130,10 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
                 if worked:
                     parts.append("По задачі вже є години, а етап ще %s — переведи, будь ласка, в IN PROGRESS."
                                  % (stage or "не проставлений"))
-                active["fill:" + tid] = {"tid": tid, "rule": "fill", "who": [email],
+                author = ((t.get("user_from") or {}).get("email") or "").lower()
+                if not author or author == "noone":
+                    author = email                # автора нет — пишем исполнителю
+                active["fill:" + tid] = {"tid": tid, "rule": "fill", "who": [author],
                                          "sig": "|".join(miss) + ("|worked" if worked else ""),
                                          "text": "Привіт! " + " ".join(parts) + " Заповни, будь ласка."}
         due = W.parse_date(t.get("date_end"))
