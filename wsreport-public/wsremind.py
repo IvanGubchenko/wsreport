@@ -256,7 +256,7 @@ def main():
                      ("to_remind", "к напоминанию"), ("sent", "отправлено"), ("errors", "ошибок")):
         print("  %-40s %d" % (label, stats[k]))
     print("Порядок в задачах (режим %s, правила %s):" % (nmode, ",".join(rules)))
-    for k, label in (("fill_active", "не заполнены тип оплаты/этап/оценка"), ("overdue_active", "просрочены"),
+    for k, label in (("fill_active", "не заполнены тип оплаты/этап"), ("overdue_active", "просрочены"),
                      ("pause_active", "на PAUSE больше 15 дней"), ("done_active", "в DONE больше 15 дней без оплаты"),
                      ("nudge_tasks_to_comment", "задач с комментарием сегодня"), ("nudge_comments", "отправлено комментариев"),
                      ("nudge_thanks", "из них «Дякую за роботу!»"), ("nudge_errors", "ошибок")):
