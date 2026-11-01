@@ -7,12 +7,14 @@
   pause   — задача на PAUSE больше 15 дней → автору задачи (если автора нет — исполнителю).
   done    — задача в DONE больше 15 дней без PAID\\CLOSE → менеджеру проекта (ответственный проекта в Worksection).
 
+Правила действуют только для задач, созданных с NUDGE_SINCE (по умолчанию 2026-11-01); старые разбираются вручную.
 Пока проблема не исправлена и ничего не менялось — напоминание повторяется каждые 3 рабочих дня.
 Когда проблема исправлена — один раз пишем «Дякую за роботу!» тем же людям.
 Если что-то по задаче поменялось, а проблема осталась (например, перенесли срок, но он снова прошёл), —
 отсчёт 3 рабочих дней начинается заново. Несколько правил по одной задаче — один общий комментарий в день.
 """
 import datetime as dt
+import os
 
 import wsreport as W
 
@@ -49,6 +51,7 @@ def _norm_name(s):
 def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_email="", rules=None, log=print):
     """team — {email: user} сотрудников отчёта IT-команд. Возвращает статистику (только количества)."""
     rules = set(rules or ("fill", "overdue", "pause", "done"))
+    since_new = dt.date.fromisoformat(os.environ.get("NUDGE_SINCE") or "2026-11-01")
     pay_names = W.pay_tags(cfg)
     pay_set = set(pay_names)
     nst = st.setdefault("nudges", {})
@@ -95,6 +98,9 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
         if not tid:
             continue
         tasks_by_id[tid] = t
+        created = W.parse_date(t.get("date_added"))
+        if not created or created < since_new:   # только задачи, созданные с NUDGE_SINCE
+            continue
         tags = _tags(t)
         stage = W.stage_from_tags(tags, pay_names)
         su = stage.upper()
