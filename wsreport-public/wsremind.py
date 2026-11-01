@@ -7,6 +7,9 @@
   • исполнитель — сотрудник из отчёта IT-команд (те же фильтры, что в wsreport.py);
   • этап ещё «до сдачи» (не DONE, не TESTING BY CLIENT/TEAM, не PAID\\CLOSE, не CANCELLED и т.п.)
     и не менялся последние STAGE_STILL_DAYS дней (этапы задач запоминаются между запусками);
+  • короткие задачи (от создания до срока меньше REMIND_DAYS+1 рабочих дней) тоже получают напоминание:
+    за (рабочих дней от создания до срока − 1) дней, т.е. в середине срока; если на задачу дали 1 рабочий день —
+    утром в день срока. Пример: создана 01.10 (ср), срок 03.10 (пт) → напоминание 02.10 (чт);
 и пишет в задачу комментарий с упоминанием исполнителя:
   «Привіт! Я бачу, що в тебе скоро кінцевий строк задачі (ДД.ММ). Чи все в тебе добре, чи встигаєш ти її зробити?»
 По каждой задаче напоминание уходит один раз на каждый срок: если срок перенесли — придёт снова к новой дате.
@@ -22,6 +25,7 @@
          python wsremind.py --mode test --test-email me@wecode.ua
          python wsremind.py --date 2026-11-03 --list
          python wsremind.py --task 1692562        (проверка: комментарий только в одну задачу, без фильтров)
+         python wsremind.py --cleanup 1692562     (удалить из задачи наши напоминания, например тестовые)
 """
 import argparse
 import datetime as dt
@@ -71,6 +75,25 @@ def workdays_left(today, due, holidays):
     return n
 
 
+def cleanup(ws, tid):
+    """Удалить из задачи комментарии-напоминания (по тексту). Метод удаления в документации API не описан,
+    поэтому пробуем известные варианты и печатаем, что ответил сервер."""
+    data = ws.call("get_comments", id_task=tid)
+    mine = [c for c in data.get("data", []) if "скоро кінцевий строк задачі" in str(c.get("text", ""))]
+    print("Задача #%s: напоминаний найдено %d" % (tid, len(mine)))
+    for c in mine:
+        cid = c.get("id")
+        for params in ({"id_comment": cid}, {"id_task": tid, "id_comment": cid}):
+            try:
+                ws.call("delete_comment", **params)
+                print("  комментарий %s удалён (delete_comment %s)" % (cid, ",".join(params)))
+                break
+            except W.WSError as e:
+                print("  delete_comment %s: %s" % (",".join(params), str(e)[:160]))
+        else:
+            print("  комментарий %s удалить через API не удалось — удалите вручную в задаче" % cid)
+
+
 def tags_of(t):
     tg = t.get("tags")
     if isinstance(tg, dict):
@@ -92,6 +115,8 @@ def main():
     ap.add_argument("--date", help="сегодняшняя дата YYYY-MM-DD (для проверки)")
     ap.add_argument("--task", default=os.environ.get("REMIND_TASK", ""),
                     help="проверка: написать комментарий только в эту задачу (номер), без фильтров")
+    ap.add_argument("--cleanup", default=os.environ.get("REMIND_CLEANUP", ""),
+                    help="удалить из задачи (номер) комментарии-напоминания этого скрипта")
     ap.add_argument("--list", action="store_true", help="вывести список задач (не использовать в публичных логах)")
     a = ap.parse_args()
 
@@ -104,6 +129,9 @@ def main():
     cfg["_month"] = today.isoformat()[:7]
 
     ws = W.Worksection(cfg["account"], cfg["api_key"])
+    if a.cleanup:
+        cleanup(ws, a.cleanup.strip().lstrip("#"))
+        return
     users = W.load_users(ws, cfg)                  # сотрудники отчёта IT-команд
     emails = {(u.get("email") or "").lower(): u for u in users.values()}
     tasks = W.load_tasks(ws)
@@ -154,10 +182,15 @@ def main():
         left = (due - today).days
         if today.weekday() >= 5 or today.isoformat() in holidays:   # в выходные и праздники не пишем
             continue
-        if workdays_left(today, due, holidays) != a.days:              # ровно за REMIND_DAYS рабочих дней
-            continue
         added = W.parse_date(t.get("date_added"))
         if added and added >= today:            # только что созданные задачи не трогаем
+            continue
+        target = a.days                          # обычно — ровно за REMIND_DAYS рабочих дней
+        if added:
+            span = workdays_left(added, due, holidays)   # сколько рабочих дней дали на задачу
+            if span <= a.days:                   # короткая задача: напоминаем в середине срока
+                target = max(0, span - 1)
+        if workdays_left(today, due, holidays) != target:
             continue
         stats["due_soon"] += 1
         u = t.get("user_to") or {}

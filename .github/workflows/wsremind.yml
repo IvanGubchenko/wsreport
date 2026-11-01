@@ -19,6 +19,10 @@ on:
         description: "Проверка: номер задачи — комментарий только в неё (без фильтров)"
         required: false
         default: ""
+      cleanup:
+        description: "Удалить из задачи (номер) напоминания этого скрипта"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -42,6 +46,7 @@ jobs:
       REMIND_TEST_EMAIL: ${{ vars.REMIND_TEST_EMAIL }}
       REMIND_FROM: ${{ vars.REMIND_FROM }}
       REMIND_TASK: ${{ inputs.task }}
+      REMIND_CLEANUP: ${{ inputs.cleanup }}
     steps:
       - name: Только 9:00 по Киеву (зимнее/летнее время)
         id: gate
