@@ -235,7 +235,7 @@ def main():
             stats["errors"] += 1
             print("  ошибка post_comment: %s" % str(e)[:200])
 
-    # повторяющиеся напоминания о порядке в задачах (свой режим NUDGE_MODE, по умолчанию dry)
+    # повторяющиеся напоминания о порядке в задачах (свой режим NUDGE_MODE; в GitHub Actions — send)
     nmode = os.environ.get("NUDGE_MODE") or "dry"
     if a.mode == "dry":
         nmode = "dry"
