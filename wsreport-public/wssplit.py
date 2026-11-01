@@ -8,6 +8,8 @@
 оценка — сумма часов группы, теги — как у родительской задачи.
 С --move записи переносятся в подзадачу: add_costs в подзадачу (тот же сотрудник, дата, часы, комментарий),
 затем delete_costs в родителе. Если добавить не удалось — исходная запись не удаляется.
+Записи без описания работ не переносятся: специалисту один раз пишется комментарий в сводной задаче
+с просьбой заполнить описание (нужно для сдачи клиенту); после заполнения следующий запуск их перенесёт.
 
 Режимы: dry — ничего не меняет, только считает; send — создаёт подзадачи (и переносит записи).
 В лог — только количества (репозиторий публичный). Подробный план и журнал — в split/ (шифруется в split.enc).
@@ -59,6 +61,7 @@ def main():
     jpath = os.path.join("split", "journal.json")
     journal = json.load(open(jpath, encoding="utf-8")) if os.path.exists(jpath) else {}
     jt = journal.setdefault(tid, {"groups": {}, "moved": {}})
+    jt.setdefault("asked", {})
 
     task = ws.call("get_task", id_task=tid).get("data") or {}
     if not task:
@@ -78,6 +81,7 @@ def main():
     d_to = dt.date.fromisoformat(a.to_date) if a.to_date else None
 
     groups = OrderedDict()
+    empty = OrderedDict()
     skipped_done = skipped_period = no_user = with_money = timer = 0
     for c in sorted(own, key=lambda c: (W.parse_date(c.get("date")) or dt.date.min, str(c.get("id")))):
         cid = str(c.get("id"))
@@ -96,6 +100,9 @@ def main():
             with_money += 1
         if c.get("is_timer") in (True, 1, "1", "true"):
             timer += 1
+        if not str(c.get("comment") or "").strip():   # без описания работ — не переносим, просим заполнить
+            empty.setdefault(email, []).append(c)
+            continue
         if a.group == "person":
             key = email
         elif a.group == "month":
@@ -156,6 +163,9 @@ def main():
         ("сотрудников", people),
         ("месяцев", len(months)),
         ("подзадач будет создано", len(plan)),
+        ("записей без описания (не переносим)", sum(len(v) for v in empty.values())),
+        ("из них специалистов попросим заполнить", sum(1 for e, v in empty.items()
+                                                   if any(str(c.get("id")) not in jt["asked"] for c in v))),
         ("записи с деньгами", with_money),
         ("записи по таймеру", timer),
         ("подзадач у задачи сейчас", len(task.get("child") or [])),
@@ -221,7 +231,31 @@ def main():
                 g["costs"].append(c["id"])
                 moved += 1
             json.dump(journal, open(jpath, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        # записи без описания: один комментарий в сводной задаче с упоминанием специалистов (по каждой записи — один раз)
+        ask = OrderedDict((e, [c for c in v if str(c.get("id")) not in jt["asked"]]) for e, v in empty.items())
+        ask = OrderedDict((e, v) for e, v in ask.items() if v)
+        asked = 0
+        if ask:
+            parts = ["Привіт! У задачі є записи часу без опису робіт:"]
+            for e, v in ask.items():
+                if len(ask) > 1:
+                    parts.append(users.get(e) or e)
+                for c in v:
+                    cd = W.parse_date(c.get("date"))
+                    parts.append("— %s, %s" % (cd.strftime("%d.%m.%Y") if cd else c.get("date"), c.get("time")))
+            parts.append("Заповни, будь ласка, опис робіт у цих записах — він потрібен для здачі задачі клієнту. "
+                         "Після цього запис буде перенесено в окрему підзадачу.")
+            try:
+                ws.call("post_comment", id_task=tid, text="\n".join(parts), mention=",".join(ask.keys()))
+                for v in ask.values():
+                    for c in v:
+                        jt["asked"][str(c.get("id"))] = dt.date.today().isoformat()
+                asked = len(ask)
+            except W.WSError as e:
+                errors += 1
+                print("  ошибка post_comment: %s" % str(e)[:200])
         print("  создано подзадач                 %d" % created)
+        print("  попросили заполнить описание     %d" % asked)
         print("  перенесено записей               %d" % moved)
         print("  ошибок                           %d" % errors)
 
