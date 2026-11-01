@@ -9,9 +9,9 @@ on:
         description: "Номер сводной задачи"
         required: true
       group:
-        description: "Группировка: month (сотрудник + месяц) / person (сотрудник) / entry (каждая запись)"
+        description: "Группировка: entry (каждая запись) / month (сотрудник + месяц) / person (сотрудник)"
         required: false
-        default: "month"
+        default: "entry"
       move:
         description: "Переносить записи времени в подзадачи: yes / no"
         required: false
