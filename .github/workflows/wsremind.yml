@@ -1,0 +1,65 @@
+name: wsremind
+
+# Напоминания исполнителям о сроках задач в Worksection (wsremind.py).
+# Режим задаётся переменной репозитория REMIND_MODE: dry (по умолчанию, ничего не пишет),
+# test (только задачи REMIND_TEST_EMAIL), send (всем). Settings → Secrets and variables → Actions → Variables.
+on:
+  schedule:
+    # 07:17 UTC = 09:17 по Киеву зимой (10:17 летом), по будням
+    - cron: "17 7 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Режим: dry / test / send (пусто — из переменной REMIND_MODE)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wsreport
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: wsreport-public
+    env:
+      TZ: Europe/Kyiv
+      WS_API_KEY: ${{ secrets.WS_API_KEY }}
+      DASH_PASS: ${{ secrets.DASH_PASS }}
+      REMIND_MODE: ${{ inputs.mode || vars.REMIND_MODE || 'dry' }}
+      REMIND_TEST_EMAIL: ${{ vars.REMIND_TEST_EMAIL }}
+      REMIND_FROM: ${{ vars.REMIND_FROM }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Расшифровать настройки
+        run: |
+          test -n "$DASH_PASS" || { echo "Нет секрета DASH_PASS"; exit 1; }
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:DASH_PASS -in state.enc | tar xzf - --no-same-permissions config.json
+          if [ -f remind.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:DASH_PASS -in remind.enc | tar xzf - --no-same-permissions
+          fi
+      - name: Напоминания о сроках
+        run: python wsremind.py
+      - name: Зашифровать и сохранить состояние
+        if: always()
+        run: |
+          if [ -f output/remind/state.json ]; then
+            tar czf - output/remind | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:DASH_PASS -out remind.enc
+          fi
+          rm -rf output config.json
+          git config user.name "wsreport-bot"
+          git config user.email "wsreport-bot@users.noreply.github.com"
+          [ -f remind.enc ] && git add remind.enc
+          git diff --cached --quiet && exit 0
+          git commit -m "wsremind $(date +%F)"
+          git pull --rebase origin main
+          git push
