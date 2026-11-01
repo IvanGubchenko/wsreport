@@ -183,6 +183,8 @@ def main():
         left = (due - today).days
         if today.weekday() >= 5 or today.isoformat() in holidays:   # в выходные и праздники не пишем
             continue
+        if due < today:                          # срок уже прошёл — это просрочка, не напоминание
+            continue
         added = W.parse_date(t.get("date_added"))
         if added and added >= today:            # только что созданные задачи не трогаем
             continue
