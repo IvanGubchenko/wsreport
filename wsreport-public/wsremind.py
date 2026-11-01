@@ -15,9 +15,9 @@
 По каждой задаче напоминание уходит один раз на каждый срок: если срок перенесли — придёт снова к новой дате.
 
 Режимы (переменная REMIND_MODE или флаг --mode):
-  dry  — ничего не пишет в Worksection, только считает (по умолчанию);
+  dry  — ничего не пишет в Worksection, только считает (по умолчанию при локальном запуске);
   test — пишет только в задачи исполнителя REMIND_TEST_EMAIL (проверить на себе);
-  send — пишет всем.
+  send — пишет всем (по умолчанию в GitHub Actions).
 Состояние (этапы и отправленные напоминания) — output/remind/state.json; в GitHub оно хранится зашифрованным.
 В лог выводятся только количества: репозиторий публичный. Подробный список — флаг --list (для локального запуска).
 
@@ -112,7 +112,8 @@ def main():
     ap.add_argument("--days", type=int, default=env_int("REMIND_DAYS", 4))
     ap.add_argument("--still", type=int, default=env_int("STAGE_STILL_DAYS", 2),
                     help="сколько дней этап не должен меняться")
-    ap.add_argument("--date", help="сегодняшняя дата YYYY-MM-DD (для проверки)")
+    ap.add_argument("--date", default=os.environ.get("REMIND_DATE") or None,
+                    help="сегодняшняя дата YYYY-MM-DD (для проверки)")
     ap.add_argument("--task", default=os.environ.get("REMIND_TASK", ""),
                     help="проверка: написать комментарий только в эту задачу (номер), без фильтров")
     ap.add_argument("--cleanup", default=os.environ.get("REMIND_CLEANUP", ""),

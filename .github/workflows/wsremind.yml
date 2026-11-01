@@ -1,8 +1,8 @@
 name: wsremind
 
 # Напоминания исполнителям о сроках задач в Worksection (wsremind.py).
-# Режим задаётся переменной репозитория REMIND_MODE: dry (по умолчанию, ничего не пишет),
-# test (только задачи REMIND_TEST_EMAIL), send (всем). Settings → Secrets and variables → Actions → Variables.
+# Режим по умолчанию — send (пишет всем). Переопределить: переменная репозитория REMIND_MODE
+# = dry (ничего не пишет) или test (только задачи REMIND_TEST_EMAIL), либо поле mode при ручном запуске. Settings → Secrets and variables → Actions → Variables.
 on:
   schedule:
     # Всегда 9:00 по Киеву, только по будням. GitHub знает только UTC, поэтому два запуска:
@@ -17,6 +17,10 @@ on:
         default: ""
       task:
         description: "Проверка: номер задачи — комментарий только в неё (без фильтров)"
+        required: false
+        default: ""
+      date:
+        description: "Проверка: «сегодняшняя» дата YYYY-MM-DD (с mode=dry — посмотреть, сколько напоминаний будет в этот день)"
         required: false
         default: ""
       cleanup:
@@ -42,11 +46,12 @@ jobs:
       TZ: Europe/Kyiv
       WS_API_KEY: ${{ secrets.WS_API_KEY }}
       DASH_PASS: ${{ secrets.DASH_PASS }}
-      REMIND_MODE: ${{ inputs.mode || vars.REMIND_MODE || 'dry' }}
+      REMIND_MODE: ${{ inputs.mode || vars.REMIND_MODE || 'send' }}
       REMIND_TEST_EMAIL: ${{ vars.REMIND_TEST_EMAIL }}
       REMIND_FROM: ${{ vars.REMIND_FROM }}
       REMIND_TASK: ${{ inputs.task }}
       REMIND_CLEANUP: ${{ inputs.cleanup }}
+      REMIND_DATE: ${{ inputs.date }}
     steps:
       - name: Только 9:00 по Киеву (зимнее/летнее время)
         id: gate
