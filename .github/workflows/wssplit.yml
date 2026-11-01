@@ -1,4 +1,5 @@
 name: wssplit
+run-name: "wssplit #${{ inputs.task }} ${{ inputs.mode }}"
 
 # Разбить сводную задачу на подзадачи по записям трудозатрат (wssplit.py). Только ручной запуск.
 # По умолчанию dry — ничего не меняет, только считает. План и журнал шифруются в wsreport-public/split.enc.
