@@ -33,6 +33,7 @@ import json
 import os
 import sys
 
+import wsnudge
 import wsreport as W
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -234,6 +235,15 @@ def main():
             stats["errors"] += 1
             print("  ошибка post_comment: %s" % str(e)[:200])
 
+    # повторяющиеся напоминания о порядке в задачах (свой режим NUDGE_MODE, по умолчанию dry)
+    nmode = os.environ.get("NUDGE_MODE") or "dry"
+    if a.mode == "dry":
+        nmode = "dry"
+    rules = [x.strip() for x in (os.environ.get("NUDGE_RULES") or "fill,overdue,pause,done").split(",") if x.strip()]
+    nstats = wsnudge.run(ws, cfg, tasks, emails, st, today, nmode, holidays,
+                         test_email=a.test_email, from_email=a.from_email, rules=rules)
+    stats.update(nstats)
+
     # чистим закрытые задачи, пишем журнал запусков (только количества)
     st["tasks"] = {k: v for k, v in seen.items() if k in alive}
     st["runs"] = (st["runs"] + [{"date": today.isoformat(), "mode": a.mode, **stats}])[-120:]
@@ -245,13 +255,20 @@ def main():
                      ("stage_moved", "  этап недавно менялся"), ("already_reminded", "  напоминание уже было"),
                      ("to_remind", "к напоминанию"), ("sent", "отправлено"), ("errors", "ошибок")):
         print("  %-40s %d" % (label, stats[k]))
+    print("Порядок в задачах (режим %s, правила %s):" % (nmode, ",".join(rules)))
+    for k, label in (("fill_active", "не заполнены тип оплаты/этап/оценка"), ("overdue_active", "просрочены"),
+                     ("pause_active", "на PAUSE больше 15 дней"), ("done_active", "в DONE больше 15 дней без оплаты"),
+                     ("nudge_tasks_to_comment", "задач с комментарием сегодня"), ("nudge_comments", "отправлено комментариев"),
+                     ("nudge_thanks", "из них «Дякую за роботу!»"), ("nudge_errors", "ошибок")):
+        print("  %-40s %d" % (label, stats.get(k, 0)))
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as f:
             f.write("### Напоминания о сроках (%s, режим %s)\n\n" % (today.isoformat(), a.mode))
             f.write("| Показатель | Кол-во |\n|---|---|\n")
-            for k in ("due_soon", "to_remind", "sent", "errors"):
-                f.write("| %s | %d |\n" % (k, stats[k]))
+            for k in ("due_soon", "to_remind", "sent", "errors", "fill_active", "overdue_active", "pause_active",
+                      "done_active", "nudge_tasks_to_comment", "nudge_comments", "nudge_thanks", "nudge_errors"):
+                f.write("| %s | %d |\n" % (k, stats.get(k, 0)))
     if stats["errors"]:
         sys.exit(1)
 
