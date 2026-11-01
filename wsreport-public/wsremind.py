@@ -2,8 +2,8 @@
 """Напоминания исполнителям о задачах, у которых скоро срок (отдельно от wsreport.py, отчёты не трогает).
 
 Каждый будний день находит открытые задачи Worksection, у которых:
-  • до срока (date_end) ровно REMIND_DAYS дней (по умолчанию 4); в пятницу — также задачи,
-    у которых этот день приходится на субботу или воскресенье (запуск только по будням);
+  • до срока (date_end) ровно REMIND_DAYS рабочих дней (по умолчанию 4): субботы, воскресенья и праздники
+    из config.json (holidays) не считаются; запуск только по будням в 9:00 по Киеву;
   • исполнитель — сотрудник из отчёта IT-команд (те же фильтры, что в wsreport.py);
   • этап ещё «до сдачи» (не DONE, не TESTING BY CLIENT/TEAM, не PAID\\CLOSE, не CANCELLED и т.п.)
     и не менялся последние STAGE_STILL_DAYS дней (этапы задач запоминаются между запусками);
@@ -21,6 +21,7 @@
 Запуск:  python wsremind.py                     (ключ — WS_API_KEY или config.json, как у wsreport.py)
          python wsremind.py --mode test --test-email me@wecode.ua
          python wsremind.py --date 2026-11-03 --list
+         python wsremind.py --task 1692562        (проверка: комментарий только в одну задачу, без фильтров)
 """
 import argparse
 import datetime as dt
@@ -60,6 +61,16 @@ def save_state(st):
         json.dump(st, f, ensure_ascii=False, indent=1)
 
 
+def workdays_left(today, due, holidays):
+    """Сколько рабочих дней от завтра до срока включительно (выходные и праздники не считаются)."""
+    n, d = 0, today + dt.timedelta(days=1)
+    while d <= due:
+        if d.weekday() < 5 and d.isoformat() not in holidays:
+            n += 1
+        d += dt.timedelta(days=1)
+    return n
+
+
 def tags_of(t):
     tg = t.get("tags")
     if isinstance(tg, dict):
@@ -79,6 +90,8 @@ def main():
     ap.add_argument("--still", type=int, default=env_int("STAGE_STILL_DAYS", 2),
                     help="сколько дней этап не должен меняться")
     ap.add_argument("--date", help="сегодняшняя дата YYYY-MM-DD (для проверки)")
+    ap.add_argument("--task", default=os.environ.get("REMIND_TASK", ""),
+                    help="проверка: написать комментарий только в эту задачу (номер), без фильтров")
     ap.add_argument("--list", action="store_true", help="вывести список задач (не использовать в публичных логах)")
     a = ap.parse_args()
 
@@ -95,6 +108,25 @@ def main():
     emails = {(u.get("email") or "").lower(): u for u in users.values()}
     tasks = W.load_tasks(ws)
     pay_names = W.pay_tags(cfg)
+    holidays = set(cfg.get("holidays") or [])
+
+    if a.task:                                  # проверка на одной задаче
+        tid = a.task.strip().lstrip("#")
+        t = next((x for x in tasks if str(x.get("id")) == tid), None)
+        if not t:
+            sys.exit("Задача #%s не найдена среди задач Worksection" % tid)
+        email = ((t.get("user_to") or {}).get("email") or "").lower()
+        due = W.parse_date(t.get("date_end"))
+        text = TEXT.format(date=due.strftime("%d.%m") if due else "скоро")
+        params = {"id_task": t.get("id"), "text": text}
+        if email and email != "noone":
+            params["mention"] = email
+        if a.from_email:
+            params["email_user_from"] = a.from_email
+        ws.call("post_comment", **params)
+        print("Проверка: комментарий записан в задачу #%s (упоминание исполнителя: %s, срок: %s)" % (
+            tid, "да" if "mention" in params else "нет исполнителя", "есть" if due else "не задан"))
+        return
 
     st = load_state()
     seen = st["tasks"]
@@ -120,9 +152,9 @@ def main():
             continue
         stats["open_with_deadline"] += 1
         left = (due - today).days
-        # ровно за REMIND_DAYS дней; в пятницу — ещё и те, у кого этот день выпадает на выходные
-        top = a.days + (2 if today.weekday() == 4 else 0)
-        if left < a.days or left > top:
+        if today.weekday() >= 5 or today.isoformat() in holidays:   # в выходные и праздники не пишем
+            continue
+        if workdays_left(today, due, holidays) != a.days:              # ровно за REMIND_DAYS рабочих дней
             continue
         added = W.parse_date(t.get("date_added"))
         if added and added >= today:            # только что созданные задачи не трогаем
@@ -171,8 +203,8 @@ def main():
     st["runs"] = (st["runs"] + [{"date": today.isoformat(), "mode": a.mode, **stats}])[-120:]
     save_state(st)
 
-    print("Режим: %s · за %d дн. до срока · этап без изменений: от %d дн." % (a.mode, a.days, a.still))
-    for k, label in (("open_with_deadline", "открытых задач со сроком"), ("due_soon", "срок через %d дн." % a.days),
+    print("Режим: %s · за %d раб. дн. до срока · этап без изменений: от %d дн." % (a.mode, a.days, a.still))
+    for k, label in (("open_with_deadline", "открытых задач со сроком"), ("due_soon", "срок через %d раб. дн." % a.days),
                      ("not_team", "  из них исполнитель не из IT-команд"), ("delivered_stage", "  уже сданы (DONE/TESTING и т.п.)"),
                      ("stage_moved", "  этап недавно менялся"), ("already_reminded", "  напоминание уже было"),
                      ("to_remind", "к напоминанию"), ("sent", "отправлено"), ("errors", "ошибок")):
