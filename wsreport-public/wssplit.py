@@ -117,15 +117,19 @@ def main():
         if a.group == "month" and d1:
             title = "%s — %s %d" % (name, MONTHS_UK[d1.month], d1.year)
         elif a.group == "entry":
-            first = (g["comments"][0] if g["comments"] else "").splitlines()[0][:80] if g["comments"] else ""
-            title = "%s — %s%s" % (name, d1.strftime("%d.%m.%Y") if d1 else "", (" — " + first) if first else "")
+            first = " ".join((g["comments"][0] if g["comments"] else "").split())
+            if len(first) > 120:
+                first = first[:117].rstrip(" ,.;") + "…"
+            title = "%s — %s" % (d1.strftime("%d.%m.%Y") if d1 else "?", first or ("Роботи — " + name))
         else:
             title = name
         lines = ["Записи трудозатрат перенесено зі зведеної задачі #%s." % tid if a.move == "yes"
                  else "Записи трудозатрат у зведеній задачі #%s." % tid,
                  "Період: %s — %s, разом %s год." % (d1.strftime("%d.%m.%Y") if d1 else "?",
                                                     d2.strftime("%d.%m.%Y") if d2 else "?", _hours_str(g["hours"]))]
-        if a.group != "entry" and g["comments"]:
+        if a.group == "entry" and g["comments"]:
+            lines += ["", g["comments"][0]]
+        elif g["comments"]:
             lines.append("")
             for c in g["costs"]:
                 if c.get("comment"):
