@@ -7,6 +7,7 @@
   pause   — задача на PAUSE больше 15 дней → автору задачи (если автора нет — исполнителю).
   done    — задача в DONE больше 15 дней без PAID\\CLOSE → менеджеру проекта (ответственный проекта в Worksection).
 
+Записи времени короче 10 минут — системные: в правилах не учитываются.
 Правила действуют только для задач, созданных с NUDGE_SINCE (по умолчанию 2026-11-01); старые разбираются вручную.
 Пока проблема не исправлена и ничего не менялось — напоминание повторяется каждые 3 рабочих дня.
 Когда проблема исправлена — один раз пишем «Дякую за роботу!» тем же людям.
@@ -23,6 +24,7 @@ PAUSE_DAYS = 15
 DONE_DAYS = 15
 DELIVERED = ("DONE", "TESTING BY CLIENT", "TESTING BY TEAM", "PAID", "CANCEL", "CLOSE", "DEFINITIVELY")
 THANKS = "Дякую за роботу!"
+MIN_ENTRY_MINUTES = 10
 
 
 def _tags(t):
@@ -86,7 +88,10 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
         tid = str((c.get("task") or {}).get("id") or "")
         if not tid:
             continue
-        hours[tid] = hours.get(tid, 0.0) + W.parse_hours(c.get("time"))
+        h = W.parse_hours(c.get("time"))
+        if h * 60 < MIN_ENTRY_MINUTES - 1e-6:     # записи короче 10 минут — системные, не учитываем
+            continue
+        hours[tid] = hours.get(tid, 0.0) + h
         d = W.parse_date(c.get("date"))
         if d and (tid not in last_work or d > last_work[tid]):
             last_work[tid] = d

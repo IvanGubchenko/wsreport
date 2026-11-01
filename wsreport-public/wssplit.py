@@ -13,6 +13,7 @@
 
 Режимы: dry — ничего не меняет, только считает; send — создаёт подзадачи (и переносит записи).
 В лог — только количества (репозиторий публичный). Подробный план и журнал — в split/ (шифруется в split.enc).
+Записи короче 10 минут считаются системными: их не переносим и описание по ним не просим.
 Повторный запуск по той же задаче не создаёт дублей: обработанные записи помнятся в журнале.
 Закрытую в Worksection задачу разбить нельзя: скрипт ничего не меняет и завершается с ошибкой «Задача закрыта».
 """
@@ -24,6 +25,8 @@ import sys
 from collections import OrderedDict
 
 import wsreport as W
+
+MIN_ENTRY_MINUTES = 10   # записи короче 10 минут — системные: не переносим и не просим описание
 
 MONTHS_UK = ["", "січень", "лютий", "березень", "квітень", "травень", "червень", "липень", "серпень",
              "вересень", "жовтень", "листопад", "грудень"]
@@ -86,7 +89,7 @@ def main():
 
     groups = OrderedDict()
     empty = OrderedDict()
-    skipped_done = skipped_period = no_user = with_money = timer = 0
+    skipped_done = skipped_period = no_user = with_money = timer = short = 0
     for c in sorted(own, key=lambda c: (W.parse_date(c.get("date")) or dt.date.min, str(c.get("id")))):
         cid = str(c.get("id"))
         if cid in jt["moved"] or any(cid in g.get("costs", []) for g in jt["groups"].values()):
@@ -95,6 +98,9 @@ def main():
         d = W.parse_date(c.get("date"))
         if (d_from and d and d < d_from) or (d_to and d and d > d_to):
             skipped_period += 1
+            continue
+        if W.parse_hours(c.get("time")) * 60 < MIN_ENTRY_MINUTES - 1e-6:
+            short += 1
             continue
         email = ((c.get("user_from") or {}).get("email") or "").lower()
         if not email:
@@ -162,6 +168,7 @@ def main():
         ("из них уже обработаны раньше", skipped_done),
         ("вне выбранного периода", skipped_period),
         ("без автора", no_user),
+        ("короче 10 минут (системные, не трогаем)", short),
         ("к обработке", sum(len(p["costs"]) for p in plan)),
         ("часов к обработке", round(allh, 1)),
         ("сотрудников", people),
