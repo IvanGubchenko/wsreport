@@ -52,6 +52,7 @@ jobs:
       REMIND_TASK: ${{ inputs.task }}
       REMIND_CLEANUP: ${{ inputs.cleanup }}
       REMIND_DATE: ${{ inputs.date }}
+      REMIND_PROBE: ${{ inputs.date == 'probe' && '1' || '' }}
     steps:
       - name: Только 9:00 по Киеву (зимнее/летнее время)
         id: gate

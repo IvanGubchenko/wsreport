@@ -130,6 +130,15 @@ def main():
     cfg["_month"] = today.isoformat()[:7]
 
     ws = W.Worksection(cfg["account"], cfg["api_key"])
+    if os.environ.get("REMIND_PROBE"):
+        pr = (ws.call("get_projects").get("data") or [])
+        print("get_projects: %d проектов; поля: %s" % (len(pr), sorted(pr[0].keys()) if pr else []))
+        for k in sorted(pr[0].keys()) if pr else []:
+            v = pr[0][k]
+            print("  %s: %s" % (k, type(v).__name__ + (" keys=" + str(sorted(v.keys())) if isinstance(v, dict) else "")))
+        withm = sum(1 for x in pr if isinstance(x.get("user_to"), dict) and x["user_to"].get("email") not in (None, "", "NOONE"))
+        print("  проектов с user_to: %d" % withm)
+        return
     if a.cleanup:
         cleanup(ws, a.cleanup.strip().lstrip("#"))
         return
