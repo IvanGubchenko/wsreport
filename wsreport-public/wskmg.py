@@ -3,7 +3,8 @@
 Вход: kmg/rows.json — строки листа «ERP», которые прочитала задача Claude из файла заказчика
 (колонки A..M как в файле: A — №, B — система, C — дата обращения, D — контакт, E — описание,
 F — приоритет, G — ответственный, H — крайний срок, I — статус, J — дата выполнения, M — комментарий;
-поле row — номер строки листа).
+поле row — номер строки листа). Для строк, по которым задача уже создана (список known из прошлого
+результата), достаточно полей A, I и row.
 
 Что делает:
   1. Задачи проекта SUPP_Казмунайгаз: подзадачи с названием «КМГ №N: …» связаны со строкой №N файла.
@@ -111,9 +112,11 @@ def main():
     skipped_ready = 0
     for r in rows:
         n = clean(r.get("A"))
-        if not n.isdigit() or not clean(r.get("E")):
+        if not n.isdigit():
             continue
         t = linked.get(n)
+        if t is None and not clean(r.get("E")):
+            continue
         if t is None:
             if is_ready(r.get("I")):
                 skipped_ready += 1
@@ -167,7 +170,9 @@ def main():
     result = {"date": today.isoformat(), "mode": mode,
               "month_task": ({"id": str(month_task.get("id")), "name": month_task.get("name")} if month_task else None),
               "created": created, "would_create": would_create, "updates": updates, "errors": errors,
-              "linked": len(linked), "skipped_ready": skipped_ready}
+              "linked": len(linked), "skipped_ready": skipped_ready,
+              # номера строк, по которым задача уже есть: в следующий раз по ним достаточно передать A, I и row
+              "known": sorted(set(linked) | {c["n"] for c in created}, key=int)}
     os.makedirs("kmg", exist_ok=True)
     json.dump(result, open(os.path.join("kmg", "result.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("Режим: %s" % mode)
