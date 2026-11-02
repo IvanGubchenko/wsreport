@@ -247,14 +247,14 @@ def main():
         ask = OrderedDict((e, v) for e, v in ask.items() if v)
         asked = 0
         if ask:
-            parts = ["Привіт! У задачі є записи часу без опису робіт:"]
+            parts = ["🤖 Привіт, це We.bit! Знайшов записи часу без опису робіт:"]
             for e, v in ask.items():
                 if len(ask) > 1:
                     parts.append(users.get(e) or e)
                 for c in v:
                     cd = W.parse_date(c.get("date"))
                     parts.append("— %s, %s" % (cd.strftime("%d.%m.%Y") if cd else c.get("date"), c.get("time")))
-            parts.append("Заповни, будь ласка, опис робіт у цих записах — він потрібен для здачі задачі клієнту. "
+            parts.append("Клієнт не вміє читати думки (і я теж). Допиши, будь ласка, що робив — це потрібно для здачі задачі клієнту. "
                          "Після цього запис буде перенесено в окрему підзадачу.")
             try:
                 ws.call("post_comment", id_task=tid, text="\n".join(parts), mention=",".join(ask.keys()))
