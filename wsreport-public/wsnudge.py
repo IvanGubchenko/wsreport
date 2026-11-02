@@ -23,7 +23,8 @@ REPEAT_WORKDAYS = 3
 PAUSE_DAYS = 15
 DONE_DAYS = 15
 DELIVERED = ("DONE", "TESTING BY CLIENT", "TESTING BY TEAM", "PAID", "CANCEL", "CLOSE", "DEFINITIVELY")
-THANKS = "Дякую за роботу!"
+INTRO = "🤖 Привіт, це We.bit!"
+THANKS = "🤖 We.bit задоволений: все виправлено. Дякую за роботу! 💚"
 MIN_ENTRY_MINUTES = 10
 
 
@@ -135,16 +136,16 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
             if miss or worked:
                 parts = []
                 if miss:
-                    parts.append("У задачі не заповнено: %s." % ", ".join(miss))
+                    parts.append("У задачі бракує: %s. Без цього я плутаюсь у звітах, а я ж робот — мені не можна плутатись." % ", ".join(miss))
                 if worked:
-                    parts.append("По задачі вже є години, а етап ще %s — переведи, будь ласка, в IN PROGRESS."
+                    parts.append("По задачі вже є години, а етап ще %s — переведи, будь ласка, в IN PROGRESS, щоб я не думав, що вона ще спить."
                                  % (stage or "не проставлений"))
                 author = ((t.get("user_from") or {}).get("email") or "").lower()
                 if not author or author == "noone":
                     author = email                # автора нет — пишем исполнителю
                 active["fill:" + tid] = {"tid": tid, "rule": "fill", "who": [author],
                                          "sig": "|".join(miss) + ("|worked" if worked else ""),
-                                         "text": "Привіт! " + " ".join(parts) + " Заповни, будь ласка."}
+                                         "text": " ".join(parts) + " Заповни, будь ласка 🙏"}
         due = W.parse_date(t.get("date_end"))
         if "overdue" in rules and is_open and in_team and due and due < today and not delivered:
             who = [email]
@@ -152,23 +153,23 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
             if head and head != email:
                 who.append(head)
             active["overdue:" + tid] = {"tid": tid, "rule": "overdue", "who": who, "sig": due.isoformat() + "|" + stage,
-                                        "text": "Привіт! Строк задачі минув (%s). Онови, будь ласка, строк або етап задачі."
+                                        "text": "Строк задачі минув (%s), а задача ще тут. Онови, будь ласка, строк або етап — я переживаю (наскільки роботи вміють)."
                                         % due.strftime("%d.%m")}
         if "pause" in rules and is_open and in_team and su.startswith("PAUSE") and stage_days > PAUSE_DAYS:
             author = ((t.get("user_from") or {}).get("email") or "").lower()
             if not author or author == "noone":
                 author = email                    # автора нет — пишем исполнителю
             active["pause:" + tid] = {"tid": tid, "rule": "pause", "who": [author], "sig": stage,
-                                      "text": "Ця задача вже більше %d днів в статусі PAUSE, потрібно її або взяти "
-                                              "в роботу, або відмінити." % PAUSE_DAYS}
+                                      "text": "Ця задача на паузі вже більше %d днів. Здається, вона заснула. "
+                                              "Розбудимо (IN PROGRESS) чи відпустимо (CANCELLED)?" % PAUSE_DAYS}
         if "done" in rules and in_team and su.startswith("DONE") and stage_days > DONE_DAYS:
             pr = t.get("project") or {}
             mgr = proj_mgr.get(str(pr.get("id"))) or proj_mgr.get(pr.get("name") or "")
             if mgr:
                 active["done:" + tid] = {"tid": tid, "rule": "done", "who": [mgr], "sig": stage,
-                                         "text": "Шановний(а) %s, ця задача більше %d днів без статусу PAID\\CLOSE. "
-                                                 "Будь ласка, виставте акт клієнту або опишіть ситуацію, чому ця задача "
-                                                 "не закрита, відповіддю на цей коментар."
+                                         "text": "%s, задача зроблена, а гроші ще ні 🙂 Більше %d днів без PAID\\CLOSE. "
+                                                 "Виставте, будь ласка, акт клієнту або напишіть у відповідь на цей коментар, "
+                                                 "що заважає її закрити."
                                                  % (name_of.get(mgr) or mgr, DONE_DAYS)}
 
     for k, v in active.items():
@@ -197,7 +198,7 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
             continue
         last = dt.date.fromisoformat(rec.get("last") or today.isoformat())
         if workday and _workdays_between(last, today, holidays) >= REPEAT_WORKDAYS:
-            queue(v["tid"], v["text"], v["who"], key, "repeat")
+            queue(v["tid"], v["text"] + " (нагадування №%d)" % ((rec.get("count") or 1) + 1), v["who"], key, "repeat")
     # проблемы, которые исправили
     for key in list(nst):
         if key in active:
@@ -213,9 +214,11 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
 
     for tid, o in outbox.items():
         only_thanks = all(k == "thanks" for _, k in o["keys"])
-        text = THANKS if only_thanks else "\n\n".join(x for x in o["texts"] if x != THANKS)
-        if not only_thanks and any(k == "thanks" for _, k in o["keys"]):
-            text = THANKS + "\n\n" + text
+        body = [x for x, (_, k) in zip(o["texts"], o["keys"]) if k != "thanks"]
+        if only_thanks:
+            text = THANKS
+        else:
+            text = INTRO + "\n\n" + ("Дякую за роботу! 💚\n\n" if any(k == "thanks" for _, k in o["keys"]) else "") + "\n\n".join(body)
         ok = True
         if mode != "dry":
             params = {"id_task": tid, "text": text, "mention": ",".join(o["who"])}
