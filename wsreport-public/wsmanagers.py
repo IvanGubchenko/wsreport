@@ -238,13 +238,21 @@ def main():
     rnd = lambda d: {p: {m: round(h, 2) for m, h in ms.items()} for p, ms in d.items() if p}
     cur = today.strftime("%Y-%m")
 
-    # --- снимок месяца (прошлые месяцы не трогаем)
+    # --- снимок месяца (прошлые месяцы не трогаем, кроме итогового снимка в первую ночь нового месяца)
     mpath = os.path.join(out, "months.json")
     months = {}
     if os.path.exists(mpath):
         with open(mpath, encoding="utf-8") as f:
             months = json.load(f)
-    months[cur] = {str(r["id"]): [r["s"], r["st"], r["f"]] for r in rows}
+    snap = {str(r["id"]): [r["s"], r["st"], r["f"]] for r in rows}
+    if cur not in months:
+        # первая ночь нового месяца: состояние сейчас = состояние на конец прошлого месяца.
+        # Перезаписываем снимок прошлого месяца, чтобы в него попали изменения последнего дня
+        # (задачи, закрытые или переведённые в оплату днём, уже после предыдущей выгрузки).
+        prev = (dt.date(today.year, today.month, 1) - dt.timedelta(days=1)).strftime("%Y-%m")
+        if prev in months:
+            months[prev] = dict(snap)
+    months[cur] = snap
     all_months = sorted(set(months) | {m for ms in pm_all.values() for m in ms if m >= start.isoformat()[:7]})
 
     files = {
