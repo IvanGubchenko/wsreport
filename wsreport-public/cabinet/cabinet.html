@@ -348,9 +348,10 @@ footer{font-size:13px;color:var(--muted);text-align:center}
       const hc = Math.min(hh, max); const r = mk('rect', { x: P.l + i * bw + 2, y: y(hc), width: Math.max(2, bw - 4), height: Math.max(0, y(0) - y(hc)), rx: 3, fill: (wd === 0 || wd === 6) ? 'var(--muted)' : 'var(--accent)', opacity: (wd === 0 || wd === 6) ? .45 : .9 });
       const tt = document.createElementNS(NS, 'title'); tt.textContent = fmtD(d.d) + ': ' + h1(d.h) + ' год'; r.append(tt);
       if (i % Math.ceil(n / 10) === 0 || i === n - 1) mk('text', { x: P.l + i * bw + bw / 2, y: H - 8, 'text-anchor': 'middle' }).textContent = fmtD(d.d); });
-    if (perDay) { mk('line', { x1: P.l, x2: W - P.r, y1: y(perDay), y2: y(perDay), stroke: 'var(--ok)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' });
-      mk('text', { x: W - P.r, y: y(perDay) - 5, 'text-anchor': 'end', fill: 'var(--ok)' }).textContent = 'норма на день ≈ ' + h1(perDay); }
-    const w = el('div'); w.append(s); return w;
+    if (perDay) { mk('line', { x1: P.l, x2: W - P.r, y1: y(perDay), y2: y(perDay), stroke: 'var(--ok)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }); }
+    const w = el('div');
+    if (perDay) { const lg = el('div'); lg.style.cssText = 'display:flex;gap:16px;justify-content:flex-end;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:0 0 6px'; lg.innerHTML = '<span><span style="display:inline-block;width:18px;border-top:2px dashed var(--ok);vertical-align:middle;margin-right:6px"></span>норма на день ≈ ' + h1(perDay) + ' год</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--muted);opacity:.45;vertical-align:middle;margin-right:6px"></span>вихідні</span>'; w.append(lg); }
+    w.append(s); return w;
   }
 })();
 </script>
