@@ -100,6 +100,38 @@ def main():
         if m:
             linked.setdefault(m.group(1), t)
 
+    if mode == "rename":
+        # разовое переименование после перенумерации строк в файле:
+        # вход — [{"id": "<id задачи>" (необязательно), "from": "9", "to": "11"}, ...]
+        renamed, errors = [], []
+        used = {m.group(1) for t, _ in flat for m in [TITLE_RE.match(t.get("name") or "")] if m}
+        for r in rows:
+            src, dst, tid = clean(r.get("from")), clean(r.get("to")), clean(r.get("id"))
+            cand = [t for t, _ in flat if (m := TITLE_RE.match(t.get("name") or "")) and m.group(1) == src
+                    and (not tid or str(t.get("id")) == tid)]
+            if len(cand) != 1:
+                errors.append("№%s→№%s: найдено задач %d" % (src, dst, len(cand)))
+                continue
+            if dst in used and dst != src and not any(clean(x.get("from")) == dst for x in rows):
+                errors.append("№%s→№%s: номер уже занят" % (src, dst))
+                continue
+            t = cand[0]
+            new = TITLE_RE.sub("КМГ №%s:" % dst, t.get("name"), count=1)
+            try:
+                ws.call("update_task", id_task=t.get("id"), title=new)
+                renamed.append({"id": str(t.get("id")), "from": src, "to": dst, "title": new})
+            except W.WSError as e:
+                errors.append("№%s→№%s: %s" % (src, dst, str(e)[:150]))
+        known = (used - {x["from"] for x in renamed}) | {x["to"] for x in renamed}
+        os.makedirs("kmg", exist_ok=True)
+        json.dump({"date": today.isoformat(), "mode": mode, "renamed": renamed, "errors": errors,
+                   "created": [], "updates": [], "known": sorted(known, key=int)},
+                  open(os.path.join("kmg", "result.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        print("Режим: rename\n  переименовано %d\n  ошибок %d" % (len(renamed), len(errors)))
+        if errors:
+            sys.exit(1)
+        return
+
     want = "поддержка %s %d" % (MONTHS[today.month].lower(), today.year)
     month_task = next((t for t, parent in flat if parent is None
                        and " ".join(norm(t.get("name"))) == want), None)

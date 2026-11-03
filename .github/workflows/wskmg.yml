@@ -10,7 +10,7 @@ on:
         description: "Строки файла: gzip + AES (DASH_PASS) + base64"
         required: true
       mode:
-        description: "dry — только посчитать, send — создать подзадачи"
+        description: "dry — только посчитать, send — создать подзадачи, rename — переименовать «КМГ №N» после перенумерации"
         required: false
         default: "dry"
       req:
