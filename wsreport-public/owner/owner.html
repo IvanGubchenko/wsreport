@@ -444,81 +444,106 @@ function waterfall(steps) {
 }
 
 /* ---------- залученість ---------- */
-const AREAS = {
-  direction: [['paid', 'Оплата: переводять у PAID\\CLOSE', 'год'], ['tails_done_h', 'DONE-хвости: акти й оплата', 'год'], ['test_h', 'Приймання клієнтом (TESTING BY CLIENT)', 'год'], ['overdue', 'Прострочені задачі', ''], ['nostage', 'Задачі без етапу', ''], ['pause', 'Задачі на PAUSE', ''], ['nopay', 'Без типу оплати', ''], ['noest', 'Без оцінки часу', ''], ['tasks', 'Задачі з нарад', '']],
-  commerce: [['paid', 'Оплата: переводять у PAID\\CLOSE', 'год'], ['tails_done_h', 'DONE-хвости: акти й оплата', 'год'], ['test_h', 'Приймання клієнтом (TESTING BY CLIENT)', 'год'], ['nocontact', 'DONE без контактної особи', ''], ['nopay', 'Без типу оплати (DONE/TESTING)', ''], ['unassigned', 'Проєкти без менеджера', ''], ['tasks', 'Задачі з нарад', '']],
+// Вага — за реальним впливом на гроші: оплата важить найбільше, порядок у задачах — найменше.
+const COMP = {
+  direction: [['pay', 'Оплата (PAID\\CLOSE)', 40], ['done', 'DONE-хвости', 20], ['over', 'Прострочки', 20], ['test', 'Приймання (TESTING BY CLIENT)', 10], ['hyg', 'Порядок у задачах', 10]],
+  commerce: [['pay', 'Оплата (PAID\\CLOSE)', 50], ['done', 'DONE-хвости', 25], ['test', 'Приймання (TESTING BY CLIENT)', 15], ['hyg', 'Порядок у проєктах', 10]],
 };
-function series(key, field) { // [{date, v}] з історії: hist.json, нічні знімки eng, сьогоднішній hyg
+const HYGF = {direction: ['nostage', 'pause', 'nopay', 'noest'], commerce: ['nocontact', 'nopay', 'unassigned']};
+function series(key, field) {
   const pts = {};
   (S.Hs || []).filter((r) => r.key === key && r[field] != null).forEach((r) => { pts[r.date] = r[field]; });
   (S.eng || []).forEach((d) => { const r = (d.rows || []).find((x) => x.key === key); if (r && r[field] != null) pts[d.date] = r[field]; });
   const t = (S.Hy || []).find((r) => r.key === key); if (t && t[field] != null) pts[t.date] = t[field];
-  return Object.keys(pts).sort().map((d) => ({date: d, v: pts[d]}));
+  return pts;
 }
+function sumSeries(key, fields) { const all = fields.map((f) => series(key, f)); const days = new Set(all.flatMap((s) => Object.keys(s))); const out = {}; days.forEach((d) => { if (all.every((s) => s[d] != null)) out[d] = all.reduce((a, s) => a + s[d], 0); }); return out; }
 function periodStart() {
   const today = S.A.date; const d = new Date(today + 'T00:00:00Z'); const iso = (x) => x.toISOString().slice(0, 10);
   if (S.ep === '7') { d.setUTCDate(d.getUTCDate() - 7); return iso(d); }
   if (S.ep === '14') { d.setUTCDate(d.getUTCDate() - 14); return iso(d); }
+  if (S.ep === '30') { d.setUTCDate(d.getUTCDate() - 30); return iso(d); }
   if (S.ep === 'm') return today.slice(0, 8) + '01';
   const past = S.meetings.map((x) => x.date).filter((x) => x < today).sort(); return past.length ? past[past.length - 1] : today.slice(0, 8) + '01';
 }
-function areaState(key, field, from) {
-  if (field === 'paid') { const rs = (S.Pd || []).filter((r) => r.key === key && r.date >= from); const h = rs.reduce((a, r) => a + r.h, 0), n = rs.reduce((a, r) => a + r.n, 0), days = new Set(rs.map((r) => r.date)).size;
-    return {kind: h > 0 ? 'do' : 'skip', now: h, text: h > 0 ? N(h) + ' год · ' + n + ' задач · ' + days + ' дн.' : 'жодної задачі', delta: null}; }
-  if (field === 'tasks') { let n = 0, d = 0, f = 0; for (const mt of S.meetings) for (const it of (mt.items || [])) { if (it.key !== key) continue; const k = markOf(mt.date, it.id); if (!k.assigned) continue; n++; if (k.status === 'done') d++; if (k.status === 'fail') f++; }
-    return n ? {kind: d === n ? 'do' : d || !f ? 'part' : 'skip', text: d + ' з ' + n + ' виконано'} : {kind: 'none', text: 'не поставлено'}; }
-  const sr = series(key, field); if (!sr.length) return {kind: 'none', text: 'немає даних'};
-  const now = sr[sr.length - 1]; const base = [...sr].reverse().find((p) => p.date <= from) || sr[0];
-  if (base.date === now.date) return {kind: 'none', now: now.v, text: 'зараз ' + N(now.v)};
-  const dlt = now.v - base.v; const tol = Math.max(1, Math.abs(base.v) * 0.02);
-  const kind = dlt <= -tol ? 'do' : dlt >= tol ? 'worse' : (now.v === 0 ? 'do' : 'skip');
-  return {kind, now: now.v, delta: dlt, text: N(base.v) + ' → ' + N(now.v) + ' (' + (dlt > 0 ? '+' : dlt < 0 ? '−' : '±') + N(Math.abs(dlt)) + ')', since: base.date};
+function workdays(from, to) { const out = []; const d = new Date(from + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); const e = new Date(to + 'T00:00:00Z'); while (d <= e) { const w = d.getUTCDay(); if (w && w !== 6) out.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); } return out; }
+function prevVal(pts, day) { const ds = Object.keys(pts).filter((x) => x < day).sort(); const p = ds[ds.length - 1]; if (!p) return null; const gap = (new Date(day) - new Date(p)) / 864e5; return gap <= 4 ? pts[p] : null; }
+// Денна оцінка компонента 0..1 (або null — немає даних за день)
+function dayScore(c, key, day, ctx) {
+  if (c === 'pay') { const r = (S.Pd || []).find((x) => x.key === key && x.date === day); const h = r ? r.h : 0; return {s: Math.min(1, h / ctx.payNorm), raw: h}; }
+  const pts = c === 'done' ? ctx.done : c === 'over' ? ctx.over : c === 'test' ? ctx.test : ctx.hyg;
+  const v = pts[day]; if (v == null) return null; const pv = prevVal(pts, day); if (pv == null) return null;
+  const d = v - pv;
+  if (c === 'over') { if (v === 0) return {s: 1, raw: v, d}; return {s: d < 0 ? 1 : d > 0 ? -0.5 : 0, raw: v, d}; } // висять щодня — 0, зросли — штраф
+  if (v === 0 && pv === 0) return {s: 1, raw: v, d};
+  return {s: d < 0 ? 1 : d > 0 ? -0.25 : 0, raw: v, d};
 }
-const KIND = {do: ['робить', 'good'], part: ['частково', 'warn'], skip: ['пропускає', 'mut'], worse: ['погіршення', 'bad'], none: ['—', 'mut']};
+function engCalc(key, from) {
+  const kind = key === 'natalia' ? 'commerce' : 'direction'; const comps = COMP[kind];
+  const ctx = {done: series(key, 'tails_done_h'), over: series(key, 'overdue'), test: series(key, 'test_h'), hyg: sumSeries(key, HYGF[kind])};
+  const doneNow = Object.values(ctx.done).slice(-1)[0] || 0; ctx.payNorm = Math.max(2, doneNow / 50); // ~2% DONE-хвостів на день = повний бал за оплату
+  const days = workdays(from, S.A.date);
+  const per = days.map((day) => { let num = 0, den = 0; const parts = {}; comps.forEach(([c, , w]) => { const r = dayScore(c, key, day, ctx); parts[c] = r; if (r) { num += w * r.s; den += w; } }); return {day, parts, score: den ? Math.max(0, num / den) : null}; });
+  const compAvg = comps.map(([c, t, w]) => { const xs = per.map((p) => p.parts[c]).filter(Boolean); return {c, t, w, n: xs.length, avg: xs.length ? xs.reduce((a, x) => a + x.s, 0) / xs.length : null, xs}; });
+  let num = 0, den = 0; compAvg.forEach((x) => { if (x.avg != null) { num += x.w * x.avg; den += x.w; } });
+  const idx = den ? Math.max(0, Math.round(num / den * 100)) : null;
+  const overDays = per.filter((p) => p.parts.over && p.parts.over.raw > 0).length, overDen = per.filter((p) => p.parts.over).length, overUp = per.filter((p) => p.parts.over && p.parts.over.d > 0).length;
+  const payDays = per.filter((p) => p.parts.pay && p.parts.pay.raw > 0).length, payH = per.reduce((a, p) => a + (p.parts.pay ? p.parts.pay.raw : 0), 0);
+  const active = per.filter((p) => p.score != null && p.score > 0.15).length;
+  return {key, kind, idx, per, compAvg, overDays, overDen, overUp, payDays, payH, payNorm: ctx.payNorm, active, days: days.length, coverage: den / comps.reduce((a, x) => a + x[2], 0)};
+}
+const sCls = (v) => v == null ? 'mut' : v >= 60 ? 'good' : v >= 35 ? 'warn' : 'bad';
 function engPage(pg) {
-  const from = periodStart();
-  const head = el('div', 'mt-head'); const l = el('div'); l.append(el('h2', null, 'Залученість керівників'), el('p', 'note', 'Що змінилось у даних кожного керівника з ' + dd(from) + ' по ' + dd(S.A.date) + ': де вони працюють, а що стоїть без змін.'));
-  const sel = el('select'); sel.id = 'esel'; [['meet', 'З останньої наради'], ['7', 'Останні 7 днів'], ['14', 'Останні 14 днів'], ['m', 'З початку місяця']].forEach(([v, t]) => sel.append(new Option(t, v))); sel.value = S.ep || 'meet'; sel.onchange = () => { S.ep = sel.value; draw(); };
+  const from = periodStart(); const keys = ['marina', 'anna', 'svitlana', 'lcw', 'natalia'];
+  const R = keys.map((k) => engCalc(k, from));
+  const head = el('div', 'mt-head'); const l = el('div'); l.append(el('h2', null, 'Залученість керівників'), el('p', 'note', 'Щоденна статистика з ' + dd(from) + ' по ' + dd(S.A.date) + ' · робочих днів: ' + (R[0] ? R[0].days : 0) + '. Кожен робочий день оцінюється за тим, що реально зрушило, з вагою за впливом на гроші.'));
+  const sel = el('select'); sel.id = 'esel'; [['meet', 'З останньої наради'], ['7', 'Останні 7 днів'], ['14', 'Останні 14 днів'], ['30', 'Останні 30 днів'], ['m', 'З початку місяця']].forEach(([v, t]) => sel.append(new Option(t, v))); sel.value = S.ep || 'meet'; sel.onchange = () => { S.ep = sel.value; draw(); };
   head.append(l, sel); pg.append(head);
-  const res = {};
-  const keys = ['marina', 'anna', 'svitlana', 'lcw', 'natalia'];
-  keys.forEach((k) => { const kind = k === 'natalia' ? 'commerce' : 'direction'; res[k] = AREAS[kind].map(([f, t, u]) => Object.assign({f, t, u}, areaState(k, f, from))); });
-  // зведення
-  const sc = (k) => { const a = res[k].filter((x) => x.kind !== 'none'); const d = a.filter((x) => x.kind === 'do').length + 0.5 * a.filter((x) => x.kind === 'part').length; return a.length ? Math.round(d / a.length * 100) : null; };
-  const c = el('div', 'card'); const t = el('table'); const hr = el('tr'); hr.append(el('th', null, 'Керівник'), el('th', null, 'Залученість'));
-  AREAS.direction.forEach(([, tt]) => { const th = el('th', null, tt.split(':')[0].replace('Задачі ', '').replace('Приймання клієнтом (TESTING BY CLIENT)', 'TESTING')); hr.append(th); });
+  // зведена таблиця
+  const c = el('div', 'card'); const t = el('table'); const hr = el('tr'); hr.append(el('th', null, 'Керівник'), el('th', null, 'Індекс залученості'));
+  COMP.direction.forEach(([, tt, w]) => hr.append(el('th', null, tt.replace(' (PAID\\CLOSE)', '').replace(' (TESTING BY CLIENT)', '') + ' · ' + w + '%')));
+  hr.append(el('th', null, 'Дні з дією'), el('th', null, 'Прострочки щодня'));
   const th0 = el('thead'); th0.append(hr); t.append(th0); const tb = el('tbody');
-  keys.forEach((k) => { const tr = el('tr'); const f = el('td'); const w = el('div', 'who2'); const nm = el('div'); nm.append(el('b', null, NAMES[k])); w.append(ava(k), nm); f.append(w); tr.append(f);
-    const v = sc(k); tr.append(el('td', null)); tr.lastChild.append(el('span', 'pill ' + (v == null ? 'mut' : v >= 60 ? 'good' : v >= 30 ? 'warn' : 'bad'), v == null ? '—' : v + '%'));
-    AREAS.direction.forEach(([fld]) => { const a = res[k].find((x) => x.f === fld) || (fld === 'pause' || fld === 'nostage' || fld === 'noest' || fld === 'overdue' ? res[k].find((x) => x.f === ({overdue: 'nocontact', nostage: 'unassigned'})[fld]) : null); const td = el('td');
-      if (!a) { td.textContent = '·'; td.className = 'mut'; } else { const [lbl, cls] = KIND[a.kind]; td.append(el('span', cls, a.kind === 'do' ? '✓' : a.kind === 'worse' ? '▲' : a.kind === 'part' ? '◐' : a.kind === 'skip' ? '○' : '·')); td.title = a.t + ': ' + a.text + ' — ' + lbl; }
-      tr.append(td); });
+  R.forEach((r) => { const tr = el('tr'); const f = el('td'); const w = el('div', 'who2'); const nm = el('div'); nm.append(el('b', null, NAMES[r.key]), el('span', 'ar', r.kind === 'commerce' ? 'комерція' : '')); w.append(ava(r.key), nm); f.append(w); tr.append(f);
+    const ti = el('td'); ti.append(el('span', 'pill ' + sCls(r.idx), r.idx == null ? '—' : r.idx + ' / 100')); if (r.coverage < 0.99) ti.append(el('span', 'tsub', 'за ' + Math.round(r.coverage * 100) + '% ваги')); tr.append(ti);
+    COMP.direction.forEach(([cc]) => { const x = r.compAvg.find((y) => y.c === cc); const td = el('td'); if (!x) { td.textContent = '·'; td.className = 'mut'; } else if (x.avg == null) { td.textContent = 'немає даних'; td.className = 'mut'; } else { const v = Math.round(Math.max(0, x.avg) * 100); td.append(el('span', sCls(v), v + '%')); td.title = 'Днів з даними: ' + x.n; } tr.append(td); });
+    tr.append(el('td', null, r.active + ' з ' + r.days));
+    tr.append(el('td', r.kind === 'commerce' ? 'mut' : r.overDen && r.overDays === r.overDen ? 'bad' : r.overDays ? 'warn' : 'good', r.kind === 'commerce' ? '—' : r.overDen ? r.overDays + ' з ' + r.overDen + (r.overUp ? ' · зросли ' + r.overUp : '') : 'немає даних'));
     tb.append(tr); });
   t.append(tb); const tw = el('div', 'tw'); tw.append(t); c.append(tw);
-  c.append(el('p', 'note', '✓ робить — показник покращився · ○ пропускає — без змін · ▲ погіршення · ◐ частково · · — немає бази. Залученість — частка напрямів, де є покращення. Для комерції колонки «Прострочені» і «Без етапу» — це «DONE без контакту» і «Проєкти без менеджера».'));
+  c.append(el('p', 'note', 'Індекс 0–100 — середнє по робочих днях. Оплата: повний бал за день, якщо в PAID\\CLOSE переведено ≥2% DONE-хвостів керівника (мінімум 2 год). DONE-хвости, приймання, порядок: бал за день, коли показник зменшився; без змін — 0, зріс — штраф. Прострочки: щодня є й не зменшуються — 0, зросли — штраф −50%, нуль — повний бал. У комерції ваги: оплата 50, DONE 25, приймання 15, порядок 10. Де ще немає щоденних знімків, індекс рахується за наявною вагою.'));
   const s1 = el('section', 'sec'); s1.append(secHead('Зведено', null), c); pg.append(s1);
-  // активність по днях
-  const s2 = el('section', 'sec'); s2.append(secHead('Оплата по днях', 'Години задач, переведених у PAID\\CLOSE за день (за датою закриття). Порожні клітинки — нічого не закрили.'));
-  const c2 = el('div', 'card'); c2.append(heat(keys)); s2.append(c2); pg.append(s2);
+  // денна стрічка
+  const s2 = el('section', 'sec'); s2.append(secHead('По днях', 'Колір — денна оцінка: зелений — реально зрушили, сірий — нічого, червоний — погіршення. Наведіть, щоб побачити деталі.'));
+  const c2 = el('div', 'card'); c2.append(dayStrip(R)); s2.append(c2); pg.append(s2);
   // картки
-  const s3 = el('section', 'sec'); s3.append(secHead('Що робить і що пропускає кожен', 'Значення на початок періоду → зараз'));
+  const s3 = el('section', 'sec'); s3.append(secHead('Що робить і що пропускає кожен', null));
   const box = el('div', 'leaders');
-  keys.forEach((k) => { const cc = el('article', 'card lc' + (k === 'natalia' ? ' wide eng' : '')); const top = el('div', 'who'); const nm = el('div', 'nm'); nm.append(el('h3', null, NAMES[k])); const v = sc(k); nm.append(el('span', 'ar', 'залученість ' + (v == null ? '—' : v + '%'))); top.append(ava(k), nm); cc.append(top);
-    const groups = [['do', 'Робить'], ['part', 'Частково'], ['worse', 'Погіршення'], ['skip', 'Пропускає'], ['none', 'Порівняння з’явиться після наступних нічних оновлень']];
-    groups.forEach(([g, gl]) => { const items = res[k].filter((x) => x.kind === g); if (!items.length) return; cc.append(el('div', 'tag ' + KIND[g][1], gl)); const kv = el('div', 'kv'); items.forEach((a) => kv.append(el('span', null, a.t), el('b', KIND[g][1], a.text))); cc.append(kv); });
+  R.forEach((r) => { const cc = el('article', 'card lc'); const top = el('div', 'who'); const nm = el('div', 'nm'); nm.append(el('h3', null, NAMES[r.key]), el('span', 'ar', 'індекс ' + (r.idx == null ? '—' : r.idx) + ' · дні з дією ' + r.active + ' з ' + r.days)); top.append(ava(r.key), nm); cc.append(top);
+    const kv = el('div', 'kv');
+    r.compAvg.forEach((x) => { const v = x.avg == null ? null : Math.round(Math.max(0, x.avg) * 100); let txt;
+      if (x.c === 'pay') txt = N(r.payH) + ' год за ' + r.payDays + ' дн. (норма ' + N(r.payNorm) + ' год/день)';
+      else if (x.c === 'over') txt = r.overDen ? 'є в ' + r.overDays + ' з ' + r.overDen + ' дн.' + (r.overUp ? ', зросли ' + r.overUp + ' раз' : '') : 'немає даних';
+      else { const good = x.xs.filter((y) => y.s > 0).length, bad = x.xs.filter((y) => y.s < 0).length; txt = x.n ? 'зменшили в ' + good + ' з ' + x.n + ' дн.' + (bad ? ', зросло ' + bad : '') : 'щоденні знімки з 05.11'; }
+      kv.append(el('span', null, x.t + ' · ' + x.w + '%'), el('b', sCls(v), (v == null ? '' : v + '% — ') + txt)); });
+    cc.append(kv);
+    const best = r.compAvg.filter((x) => x.avg != null).sort((a, b) => b.avg * b.w - a.avg * a.w)[0]; const worst = r.compAvg.filter((x) => x.avg != null).sort((a, b) => a.avg * b.w - b.avg * a.w)[0];
+    const f = el('div', 'foot'); f.append(el('span', null, best && best.avg > 0 ? 'Працює: ' + best.t : 'Немає зрушень'), el('b', 'bad', worst && worst !== best && worst.avg <= 0.2 ? 'Пропускає: ' + worst.t : '')); cc.append(f);
     box.append(cc); });
   s3.append(box); pg.append(s3);
 }
-function heat(keys) {
-  const end = S.A.date; const days = []; const d = new Date(end + 'T00:00:00Z'); for (let i = 20; i >= 0; i--) { const x = new Date(d); x.setUTCDate(d.getUTCDate() - i); days.push(x.toISOString().slice(0, 10)); }
-  const val = (k, day) => (S.Pd || []).find((r) => r.key === k && r.date === day);
-  const max = Math.max(1, ...(S.Pd || []).filter((r) => days.includes(r.date)).map((r) => r.h));
-  const W = 900, rowH = 30, lw = 150, cw = (W - lw) / days.length, HH = keys.length * rowH + 30;
-  const svg = svgEl('svg', {width: '100%', viewBox: `0 0 ${W} ${HH}`, role: 'img', 'aria-label': 'Оплата по днях'}); const wrap = el('div', 'chart'); wrap.append(svg);
-  keys.forEach((k, i) => { const tx = svgEl('text', {x: 0, y: i * rowH + 19, 'font-size': 12.5, fill: 'var(--ink)'}); tx.textContent = NAMES[k]; svg.append(tx);
-    days.forEach((day, j) => { const v = val(k, day); const wd = new Date(day + 'T00:00:00Z').getUTCDay(); const r = svgEl('rect', {x: lw + j * cw + 1.5, y: i * rowH + 3, width: cw - 3, height: rowH - 6, rx: 4, fill: v ? COL[k] : (wd === 0 || wd === 6 ? 'transparent' : 'var(--soft)'), opacity: v ? 0.25 + 0.75 * Math.min(1, v.h / max) : 1, stroke: v ? 'none' : 'var(--line)'});
-      r.addEventListener('mousemove', (ev) => showTip(wrap, ev, NAMES[k] + ' · ' + dd(day), [[COL[k], 'Переведено в PAID\\CLOSE', v ? N(v.h) + ' год, ' + v.n + ' задач' : 'нічого']])); r.addEventListener('mouseleave', () => { tipOf(wrap).hidden = true; }); svg.append(r); }); });
-  days.forEach((day, j) => { if (j % 3 && j !== days.length - 1) return; const tx = svgEl('text', {x: lw + j * cw + cw / 2, y: HH - 6, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)'}); tx.textContent = day.slice(8, 10) + '.' + day.slice(5, 7); svg.append(tx); });
+function dayStrip(R) {
+  const days = R[0] ? R[0].per.map((p) => p.day) : []; const wrap = el('div', 'chart');
+  if (!days.length) { wrap.append(el('p', 'muted', 'У періоді ще немає робочих днів.')); return wrap; }
+  const W = 900, rowH = 32, lw = 160, cw = Math.min(60, (W - lw) / days.length), HH = R.length * rowH + 28;
+  const svg = svgEl('svg', {width: '100%', viewBox: `0 0 ${W} ${HH}`, role: 'img', 'aria-label': 'Залученість по днях'}); wrap.append(svg);
+  R.forEach((r, i) => { const tx = svgEl('text', {x: 0, y: i * rowH + 20, 'font-size': 12.5, fill: 'var(--ink)'}); tx.textContent = NAMES[r.key]; svg.append(tx);
+    r.per.forEach((p, j) => { const s = p.score; const fill = s == null ? 'var(--soft)' : s >= 0.5 ? 'var(--ok)' : s > 0.15 ? 'var(--warn)' : s > 0 ? 'var(--ref)' : 'var(--line)';
+      const anyBad = Object.values(p.parts).some((x) => x && x.s < 0);
+      const rc = svgEl('rect', {x: lw + j * cw + 2, y: i * rowH + 4, width: cw - 4, height: rowH - 8, rx: 5, fill: anyBad && (s == null || s < 0.15) ? 'var(--bad)' : fill, opacity: s == null ? 1 : 0.35 + 0.65 * Math.min(1, Math.max(0.2, s))});
+      rc.addEventListener('mousemove', (ev) => showTip(wrap, ev, NAMES[r.key] + ' · ' + dd(p.day) + (s == null ? ' · немає даних' : ' · ' + Math.round(s * 100) + '/100'), r.compAvg.map((x) => { const q = p.parts[x.c]; return [q ? (q.s > 0 ? 'var(--ok)' : q.s < 0 ? 'var(--bad)' : 'var(--ref)') : 'var(--line)', x.t, !q ? 'немає даних' : x.c === 'pay' ? N(q.raw) + ' год' : N(q.raw) + (q.d != null ? ' (' + (q.d > 0 ? '+' : q.d < 0 ? '−' : '±') + N(Math.abs(q.d)) + ')' : '')]; })));
+      rc.addEventListener('mouseleave', () => { tipOf(wrap).hidden = true; }); svg.append(rc); }); });
+  days.forEach((day, j) => { if (days.length > 12 && j % 2 && j !== days.length - 1) return; const tx = svgEl('text', {x: lw + j * cw + cw / 2, y: HH - 6, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)'}); tx.textContent = day.slice(8, 10) + '.' + day.slice(5, 7); svg.append(tx); });
   return wrap;
 }
 
@@ -560,7 +585,7 @@ function meetingBlock(mt, isPrev) {
   const assigned = items.filter((it) => markOf(mt.date, it.id).assigned);
   const done = assigned.filter((it) => markOf(mt.date, it.id).status === 'done').length;
   s.append(el('h2', null, isPrev ? 'Перевірка задач з наради ' + dd(mt.date) : 'Рекомендації на цю нараду'));
-  s.append(el('p', 'note', isPrev ? 'Поставлено ' + assigned.length + ' задач, виконано ' + done + '. Поставте результат по кожній.' : 'По 4 рекомендації кожному керівнику. Поставлено: ' + assigned.length + ' з ' + items.length + '.'));
+  s.append(el('p', 'note', isPrev ? 'Поставлено ' + assigned.length + ' задач, виконано ' + done + '. Поставте результат по кожній.' : 'По 4 рекомендації кожному керівнику, плюс падаючі проєкти, де вони є. Поставлено: ' + assigned.length + ' з ' + items.length + '.'));
   const box = el('div', 'leaders');
   ORDER.forEach((k) => {
     let its = items.filter((it) => it.key === k); if (isPrev) its = its.filter((it) => markOf(mt.date, it.id).assigned);
@@ -612,9 +637,9 @@ function howPage(pg) {
    ['Хвости', 'Незакриті задачі, створені до місяця: в роботі, на прийманні клієнтом і в DONE (зроблено, не оплачено). Години — фактичні години в цих задачах на кінець місяця.'],
    ['Індекс', 'Індекс здоров’я напряму з дашборду IT-команд (0–100): норма, прострочки, хвости, точність оцінок.'],
    ['Комерція', 'Усі проєкти, закріплені за менеджерами в дашборді менеджерів, без внутрішніх. Свідрук Наталя відповідає за зведений результат усіх менеджерів.'],
-   ['Наради', 'Наради 1-го і 15-го числа. Вночі перед нарадою готуються по 4 рекомендації кожному керівнику з цифрою «було → ціль». Ви відмічаєте поставлені задачі, а на наступній нараді — результат. Біля задачі видно поточне значення показника.'],
+   ['Наради', 'Наради 1-го і 15-го числа. Вночі перед нарадою готуються по 4 рекомендації кожному керівнику з цифрою «було → ціль», а де є падаючі проєкти (годин стало на 30% і більше менше, ніж за ті ж дні минулого місяця, або не стало зовсім) — п’ята: вивести проєкт на години або заархівувати в Worksection. Ви відмічаєте поставлені задачі, а на наступній нараді — результат. Біля задачі видно поточне значення показника.'],
    ['Хвости', 'Вкладка «Хвости»: помісячно за місяцем створення, по проєктах і рух за місяць — скільки закрили, скільки додалось нових.'],
-   ['Залученість', 'Порівнюємо дані кожного керівника на початок періоду (з останньої наради, 7 або 14 днів) і зараз: оплата (переведення в PAID\\CLOSE), DONE-хвости, приймання, прострочки, задачі без етапу, PAUSE, без типу оплати й оцінки, задачі з нарад. Покращилось — «робить», без змін — «пропускає». Щоночі зберігається знімок, тому історія накопичується з 04.11.2026.'],
+   ['Залученість', 'Індекс 0–100 за щоденною статистикою. Кожен робочий день оцінюється за тим, що реально зрушило, з вагою за впливом на гроші: оплата (переведення в PAID\\CLOSE) 40%, DONE-хвости 20%, прострочки 20%, приймання клієнтом 10%, порядок у задачах (без етапу, PAUSE, без типу оплати, без оцінки) 10%. Регулярні прострочки, що не зменшуються, дають 0, зростання — штраф. У комерції: оплата 50, DONE 25, приймання 15, порядок 10. Щоденні знімки зберігаються з 04.11.2026.'],
    ['Оновлення', 'Щоночі о 02:00 з Worksection і дашборду менеджерів.']].forEach(([a, b]) => { dl.append(el('dt', null, a), el('dd', null, b)); });
   c.append(dl); pg.append(c);
 }
