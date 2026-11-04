@@ -105,6 +105,25 @@ dl{display:grid;grid-template-columns:minmax(10rem,max-content) 1fr;gap:12px 20p
 /* наради */
 .mt-head{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;justify-content:space-between}
 select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
+.mrows{display:grid;gap:12px}
+.mrow{grid-template-columns:minmax(150px,180px) minmax(0,1fr);column-gap:18px;align-items:start}
+.mside{display:grid;gap:10px;align-content:start;position:sticky;top:8px}
+.rh-list{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(178px,1fr);gap:8px;overflow-x:auto;padding-bottom:4px}
+.rec.tile{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--soft);display:flex;flex-direction:column;gap:8px;min-width:0}
+.rec.tile:first-of-type{border-top:1px solid var(--line);padding-top:12px}
+.rec.tile .rtop{display:flex;gap:8px;align-items:center}
+.rec.tile .tag{margin:0}
+.rec.tile .tx{flex:1}
+.rec.tile .prog,.rec.tile .acts{padding-left:0}
+.rec.tile .tx{font-size:13px}
+.rec.tile .prog{display:flex;flex-wrap:wrap;gap:2px 5px;align-items:baseline}
+.rec.tile .prog .pill{flex-basis:auto}
+.rec.tile .seg{display:flex;flex-wrap:wrap;width:100%}.rec.tile .seg button{flex:1 1 auto;padding:5px 6px;font-size:12px}
+.rec.tile .asg{padding:4px 9px}
+.rec.tile .notein{margin-left:0;width:100%}
+.rec.tile.fall{border-color:var(--warn)}.rec.tile.fall .tag{color:var(--warn)}
+.rec.tile.st-asg{background:var(--accbg)}.rec.tile.st-done{background:var(--okbg)}.rec.tile.st-part{background:var(--warnbg)}.rec.tile.st-fail{background:var(--badbg)}
+@media (max-width:760px){.mrow{grid-template-columns:1fr}.mside{position:static;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center}.rh-list{grid-auto-columns:minmax(250px,85%)}}
 .rec{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
 .rec:first-of-type{border-top:0;padding-top:0}
 .rec .rh{display:flex;gap:10px;align-items:flex-start}
@@ -586,23 +605,26 @@ function meetingBlock(mt, isPrev) {
   const done = assigned.filter((it) => markOf(mt.date, it.id).status === 'done').length;
   s.append(el('h2', null, isPrev ? 'Перевірка задач з наради ' + dd(mt.date) : 'Рекомендації на цю нараду'));
   s.append(el('p', 'note', isPrev ? 'Поставлено ' + assigned.length + ' задач, виконано ' + done + '. Поставте результат по кожній.' : 'По 4 рекомендації кожному керівнику, плюс падаючі проєкти, де вони є. Поставлено: ' + assigned.length + ' з ' + items.length + '.'));
-  const box = el('div', 'leaders');
+  const box = el('div', 'mrows');
   ORDER.forEach((k) => {
     let its = items.filter((it) => it.key === k); if (isPrev) its = its.filter((it) => markOf(mt.date, it.id).assigned);
     if (!its.length) return;
-    const c = el('article', 'card'); const hd = el('div', 'hd'); hd.style.display = 'flex'; hd.style.justifyContent = 'space-between'; hd.style.gap = '8px';
-    hd.append(el('h3', null, NAMES[k])); const st = its.filter((it) => markOf(mt.date, it.id).status === 'done').length;
-    if (isPrev) hd.append(el('span', 'pill ' + (st === its.length ? 'good' : st ? 'warn' : 'bad'), st + ' з ' + its.length));
-    c.append(hd);
-    its.forEach((it) => c.append(recRow(mt, it, isPrev)));
-    box.append(c);
+    const c = el('article', 'card mrow'); const side = el('div', 'mside');
+    const who = el('div', 'who'); const nm = el('div', 'nm'); const ar = AREAS_SHORT[k] || '';
+    nm.append(el('h3', null, NAMES[k]), el('span', 'ar', ar)); who.append(ava(k), nm); side.append(who);
+    const asg = its.filter((it) => markOf(mt.date, it.id).assigned).length, st = its.filter((it) => markOf(mt.date, it.id).status === 'done').length;
+    side.append(isPrev ? el('span', 'pill ' + (st === its.length ? 'good' : st ? 'warn' : 'bad'), 'виконано ' + st + ' з ' + its.length) : el('span', 'pill ' + (asg ? 'good' : 'mut'), 'поставлено ' + asg + ' з ' + its.length));
+    const row = el('div', 'rh-list');
+    its.forEach((it, n) => row.append(recRow(mt, it, isPrev, n + 1)));
+    c.append(side, row); box.append(c);
   });
   if (!box.children.length) box.append(el('p', 'muted', 'На тій нараді задачі не відмічені як поставлені.'));
   s.append(box); return s;
 }
-function recRow(mt, it, isPrev) {
-  const r = el('div', 'rec'); const mk = markOf(mt.date, it.id);
-  if (it.section) r.append(el('span', 'tag', it.section));
+const AREAS_SHORT = {marina: 'Fuel Solutions + BAS Solutions D&I', anna: 'Mobile', svitlana: 'Customer Support', lcw: 'BAS LCW', natalia: 'Комерція: менеджери проєктів'};
+function recRow(mt, it, isPrev, num) {
+  const mk = markOf(mt.date, it.id); const r = el('div', 'rec tile' + (mk.status ? ' st-' + mk.status : mk.assigned ? ' st-asg' : '') + (it.section === 'Падаючі проєкти' ? ' fall' : ''));
+  const top = el('div', 'rtop'); top.append(el('span', 'num', String(num || '')), el('span', 'tag', it.section || '')); r.append(top);
   r.append(el('div', 'tx', it.text));
   if (it.metric) {
     const v = liveValue(it); const ok = verdict(it, v); const pr = el('div', 'prog');
