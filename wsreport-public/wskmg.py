@@ -45,7 +45,7 @@ def xdate(v):
         return dt.date(1899, 12, 30) + dt.timedelta(days=int(float(s)))
     except ValueError:
         pass
-    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%m/%d/%Y"):
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):  # в Казахстане день идёт первым: 05/11/2026 = 5 ноября
         try:
             return dt.datetime.strptime(s[:10], fmt).date()
         except ValueError:
