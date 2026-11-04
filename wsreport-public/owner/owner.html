@@ -109,6 +109,14 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
 .mrow{grid-template-columns:minmax(150px,180px) minmax(0,1fr);column-gap:18px;align-items:start}
 .mside{display:grid;gap:10px;align-content:start;position:sticky;top:8px}
 .rh-list{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(178px,1fr);gap:8px;overflow-x:auto;padding-bottom:4px}
+.res{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.rb{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:7px 4px;cursor:pointer;color:var(--muted);min-width:0}
+.rb .ic{font-size:15px;line-height:1;font-weight:700}.rb .lb{font-size:11px;line-height:1.15;text-align:center}
+.rb:hover{border-color:var(--ink);color:var(--ink)}
+.rb.s-done[aria-pressed=true]{background:var(--ok);border-color:var(--ok);color:#fff}
+.rb.s-part[aria-pressed=true]{background:var(--warn);border-color:var(--warn);color:#fff}
+.rb.s-fail[aria-pressed=true]{background:var(--bad);border-color:var(--bad);color:#fff}
+.saved{font-size:11.5px;min-height:14px}
 .rec.tile{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--soft);display:flex;flex-direction:column;gap:8px;min-width:0}
 .rec.tile:first-of-type{border-top:1px solid var(--line);padding-top:12px}
 .rec.tile .rtop{display:flex;gap:8px;align-items:center}
@@ -567,7 +575,7 @@ function dayStrip(R) {
 }
 
 /* ---------- наради ---------- */
-const STATUS = [['done', 'Виконано', 's-done'], ['part', 'Частково', 's-part'], ['fail', 'Не виконано', 's-fail']];
+const STATUS = [['done', 'Виконано', 's-done', '✓'], ['part', 'Частково', 's-part', '½'], ['fail', 'Не виконано', 's-fail', '✕']];
 const markOf = (date, id) => S.marks[date + '_' + id] || {};
 function openTasks(key) {
   let n = 0, done = 0, fail = 0;
@@ -576,12 +584,16 @@ function openTasks(key) {
 }
 function liveValue(it) { const r = S.L.find((x) => x.month === cur() && x.key === it.key); return r && it.metric ? r[it.metric] : null; }
 function verdict(it, v) { if (v == null || it.target == null) return null; return it.op === '>=' ? v >= it.target : v <= it.target; }
-async function saveMark(date, it, patch) {
-  if (!S.db) { toast('Щоб відмічати задачі, відкрийте дашборд, увійшовши в claude.ai.'); return; }
+async function saveMark(date, it, patch, quiet) {
+  if (!S.db) { toast('Щоб відмічати задачі, відкрийте дашборд, увійшовши в claude.ai.'); return false; }
   const id = date + '_' + it.id; const doc = Object.assign({meeting: date, rec: it.id, key: it.key, assigned: false, status: '', note: ''}, S.marks[id] || {}, patch, {at: new Date().toISOString()});
-  S.marks[id] = doc; draw();
-  try { await S.db.doc('marks/' + id).set(doc); } catch (e) { toast('Не вдалося зберегти. Спробуйте ще раз.'); }
+  S.marks[id] = doc; S.saving = S.saving || {}; S.saving[id] = 'pending'; if (!quiet) draw();
+  try { await S.db.doc('marks/' + id).set(doc); S.saving[id] = 'ok'; const g = await S.db.doc('marks/' + id).get(); if (!g.exists || g.data().status !== doc.status || g.data().assigned !== doc.assigned) throw new Error('не збереглось'); }
+  catch (e) { S.saving[id] = 'err'; toast('Не вдалося зберегти відмітку. Перевірте з’єднання й натисніть ще раз.'); }
+  if (!quiet) draw(); else { const el2 = document.getElementById('sv-' + id); if (el2) paintSaved(el2, id); }
+  return S.saving[id] === 'ok';
 }
+function paintSaved(x, id) { const st = (S.saving || {})[id]; const mk = S.marks[id]; x.className = 'saved ' + (st === 'err' ? 'bad' : st === 'pending' ? 'mut' : 'good'); x.textContent = st === 'pending' ? 'Зберігаю…' : st === 'err' ? 'Не збережено' : mk && mk.at ? '✓ Збережено ' + new Date(mk.at).toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'}) : ''; }
 function meetingsPage(pg) {
   const list = [...S.meetings].sort((a, b) => b.date.localeCompare(a.date));
   const next = nextMeeting();
@@ -636,16 +648,19 @@ function recRow(mt, it, isPrev, num) {
   const acts = el('div', 'acts');
   const lab = el('label', 'asg' + (mk.assigned ? ' on' : '')); const cb = el('input'); cb.type = 'checkbox'; cb.id = 'a-' + mt.date + '-' + it.id; cb.checked = !!mk.assigned; cb.onchange = () => saveMark(mt.date, it, {assigned: cb.checked}); lab.append(cb, 'Поставлено');
   acts.append(lab);
-  if (mk.assigned || isPrev) {
-    const seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Результат');
-    STATUS.forEach(([v, t, cls]) => { const b = el('button', cls, t); b.type = 'button'; b.setAttribute('aria-pressed', mk.status === v); b.onclick = () => saveMark(mt.date, it, {assigned: true, status: mk.status === v ? '' : v}); seg.append(b); });
-    acts.append(seg);
-  }
   r.append(acts);
-  if (mk.assigned) {
-    const ta = el('textarea', 'notein'); ta.id = 'n-' + mt.date + '-' + it.id; ta.placeholder = 'Коментар: строк, що домовились'; ta.value = mk.note || ''; ta.rows = 1;
-    ta.onchange = () => saveMark(mt.date, it, {note: ta.value.trim()}); r.append(ta);
+  if (mk.assigned || isPrev) {
+    const res = el('div', 'res'); res.setAttribute('role', 'group'); res.setAttribute('aria-label', 'Результат');
+    STATUS.forEach(([v, t, cls, ic]) => { const b = el('button', 'rb ' + cls); b.type = 'button'; b.setAttribute('aria-pressed', mk.status === v); b.title = t; b.append(el('span', 'ic', ic), el('span', 'lb', t)); b.onclick = () => saveMark(mt.date, it, {assigned: true, status: mk.status === v ? '' : v}); res.append(b); });
+    r.append(res);
   }
+  if (mk.assigned) {
+    const ta = el('textarea', 'notein'); ta.id = 'n-' + mt.date + '-' + it.id; ta.placeholder = 'Коментар: строк, що домовились'; ta.value = mk.note || ''; ta.rows = 2;
+    let tmr; ta.oninput = () => { clearTimeout(tmr); tmr = setTimeout(() => saveMark(mt.date, it, {note: ta.value.trim()}, true), 900); };
+    ta.onblur = () => { clearTimeout(tmr); if ((S.marks[mt.date + '_' + it.id] || {}).note !== ta.value.trim()) saveMark(mt.date, it, {note: ta.value.trim()}, true); };
+    r.append(ta);
+  }
+  const sv = el('div', 'saved'); sv.id = 'sv-' + mt.date + '_' + it.id; paintSaved(sv, mt.date + '_' + it.id); r.append(sv);
   return r;
 }
 function nextMeeting() { const t = new Date(); const y = t.getFullYear(), m = t.getMonth(), d = t.getDate(); const f = (Y, M, D) => Y + '-' + String(M + 1).padStart(2, '0') + '-' + String(D).padStart(2, '0'); if (d < 15) return f(y, m, 15); return m === 11 ? f(y + 1, 0, 1) : f(y, m + 1, 1); }
