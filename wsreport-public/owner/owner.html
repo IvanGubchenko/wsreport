@@ -116,7 +116,10 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
 .rb.s-done[aria-pressed=true]{background:var(--ok);border-color:var(--ok);color:#fff}
 .rb.s-part[aria-pressed=true]{background:var(--warn);border-color:var(--warn);color:#fff}
 .rb.s-fail[aria-pressed=true]{background:var(--bad);border-color:var(--bad);color:#fff}
+#page{display:grid;gap:24px}
+td a{color:var(--ink);text-decoration-color:var(--line);text-underline-offset:3px}td a:hover{text-decoration-color:var(--ink)}
 .saved{font-size:11.5px;min-height:14px}
+.res-row{display:flex;gap:4px;flex-wrap:nowrap}.res-row .rb{width:auto;padding:4px 9px}
 .rec.tile{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--soft);display:flex;flex-direction:column;gap:8px;min-width:0}
 .rec.tile:first-of-type{border-top:1px solid var(--line);padding-top:12px}
 .rec.tile .rtop{display:flex;gap:8px;align-items:center}
@@ -165,6 +168,7 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
       <button class="tab" role="tab" data-t="ov" id="tab-ov">Огляд</button>
       <button class="tab" role="tab" data-t="tl" id="tab-tl">Хвости</button>
       <button class="tab" role="tab" data-t="en" id="tab-en">Залученість</button>
+      <button class="tab" role="tab" data-t="ps" id="tab-ps">Пресейли</button>
       <button class="tab" role="tab" data-t="mt" id="tab-mt">Наради й задачі</button>
       <button class="tab" role="tab" data-t="how" id="tab-how">Як рахується</button>
     </nav>
@@ -173,9 +177,9 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
 </div>
 <script>
 (() => {
-const S = {tab: 'ov', month: '', L: [], M: [], G: [], A: null, meetings: [], marks: {}, mt: '', db: null, me: null, err: ''};
+const S = {pre: {}, tab: 'ov', month: '', L: [], M: [], G: [], A: null, meetings: [], marks: {}, mt: '', db: null, me: null, err: ''};
 try { const t = localStorage.getItem('ow_tab'); if (t) S.tab = t; } catch (e) {}
-if (['ov', 'tl', 'en', 'mt', 'how'].includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
+if (['ov', 'tl', 'en', 'ps', 'mt', 'how'].includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
 const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
 const nf = new Intl.NumberFormat('uk-UA', {maximumFractionDigits: 0});
 const N = (v) => v == null ? '—' : nf.format(v), H = (v) => v == null ? '—' : nf.format(v) + ' год', P = (v) => v == null ? '—' : v + '%';
@@ -574,6 +578,66 @@ function dayStrip(R) {
   return wrap;
 }
 
+/* ---------- пресейли ---------- */
+const RES = [['won', 'Виграли', 's-done', '✓'], ['lost', 'Програли', 's-fail', '✕'], ['open', 'Ще вирішується', 's-part', '…']];
+async function savePre(r, patch) {
+  if (!S.db) { toast('Щоб відмічати, відкрийте дашборд, увійшовши в claude.ai.'); return; }
+  const doc = Object.assign({result: '', note: ''}, S.pre[r.id] || {}, patch, {title: r.title, at: new Date().toISOString()});
+  S.pre[r.id] = doc; S.preSave = S.preSave || {}; S.preSave[r.id] = 'pending'; draw();
+  try { await S.db.doc('presale/' + r.id).set(doc); const g = await S.db.doc('presale/' + r.id).get(); if (!g.exists || g.data().result !== doc.result) throw new Error(); S.preSave[r.id] = 'ok'; }
+  catch (e) { S.preSave[r.id] = 'err'; toast('Не вдалося зберегти результат пресейлу. Натисніть ще раз.'); }
+  draw();
+}
+function presalePage(pg) {
+  const P = S.Ps || []; const res = (r) => (S.pre[r.id] || {}).result || '';
+  const m = S.pm2 || ''; const L = P.filter((r) => !m || r.cm === m);
+  const won = L.filter((r) => res(r) === 'won').length, lost = L.filter((r) => res(r) === 'lost').length, open = L.length - won - lost;
+  const rate = won + lost ? Math.round(won / (won + lost) * 100) : null;
+  const head = el('div', 'mt-head'); const l = el('div'); l.append(el('h2', null, 'Пресейли'), el('p', 'note', 'Усі задачі проєкту ADM_Пресейл у Worksection. Результат відмічаєте ви або Свідрук Наталя — з нього рахується відсоток виграних.'));
+  const sel = el('select'); sel.id = 'pmsel'; sel.append(new Option('Усі місяці', '')); [...new Set(P.map((r) => r.cm))].sort().reverse().forEach((x) => sel.append(new Option(mf(x), x))); sel.value = m; sel.onchange = () => { S.pm2 = sel.value; draw(); };
+  head.append(l, sel); pg.append(head);
+  const tiles = el('div', 'tiles'); const tile = (lab, big, cls, sm) => { const d = el('div', 'card tile'); d.append(el('span', 'lab', lab), el('span', 'big ' + (cls || ''), big), el('span', 'sm', sm)); tiles.append(d); };
+  tile('Відсоток виграних', rate == null ? '—' : rate + '%', rate == null ? '' : rate >= 40 ? 'good' : rate >= 20 ? 'warn' : 'bad', 'виграно з тих, де є рішення');
+  tile('Пресейлів', N(L.length), '', m ? mf(m) : 'за весь час');
+  tile('Виграли', N(won), 'good', 'стали проєктом');
+  tile('Програли', N(lost), 'bad', 'клієнт відмовився');
+  tile('Без рішення', N(open), open ? 'warn' : '', 'треба дізнатись результат');
+  tile('Години на пресейли', N(L.reduce((a, r) => a + (r.h || 0), 0)), '', 'усього списано');
+  pg.append(tiles);
+  // по місяцях
+  const ms = [...new Set(P.map((r) => r.cm))].sort();
+  const c1 = el('div', 'card'); c1.append(el('h3', null, 'По місяцях'));
+  const t1 = el('table'); t1.innerHTML = '<thead><tr><th>Місяць</th><th>Пресейлів</th><th>Виграли</th><th>Програли</th><th>Без рішення</th><th>% виграних</th><th>Годин</th></tr></thead>';
+  const b1 = el('tbody'); ms.forEach((x) => { const rs = P.filter((r) => r.cm === x); const w = rs.filter((r) => res(r) === 'won').length, lo = rs.filter((r) => res(r) === 'lost').length; const rt = w + lo ? Math.round(w / (w + lo) * 100) : null; const tr = el('tr');
+    tr.append(el('td', 'l', mf(x)), el('td', null, N(rs.length)), el('td', w ? 'good' : 'mut', N(w)), el('td', lo ? 'bad' : 'mut', N(lo)), el('td', rs.length - w - lo ? 'warn' : 'mut', N(rs.length - w - lo)), el('td', rt == null ? 'mut' : rt >= 40 ? 'good' : rt >= 20 ? 'warn' : 'bad', rt == null ? '—' : rt + '%'), el('td', null, N(rs.reduce((a, r) => a + (r.h || 0), 0)))); b1.append(tr); });
+  t1.append(b1); const w1 = el('div', 'tw'); w1.append(t1); c1.append(w1); pg.append(c1);
+  // список
+  const c2 = el('div', 'card'); c2.append(el('h3', null, 'Усі пресейли' + (m ? ' · ' + mf(m) : '')));
+  const f = el('div', 'acts'); f.style.paddingLeft = '0'; const q = el('input'); q.type = 'text'; q.id = 'pq'; q.placeholder = 'Пошук: клієнт, виконавець'; q.value = S.pq || ''; q.style.cssText = 'flex:1 1 220px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--soft)';
+  const fr = el('select'); fr.id = 'pfr'; [['', 'Усі результати'], ['none', 'Без рішення'], ['won', 'Виграли'], ['lost', 'Програли']].forEach(([v, t]) => fr.append(new Option(t, v))); fr.value = S.pfr || ''; f.append(q, fr); c2.append(f);
+  const tw = el('div', 'tw'); c2.append(tw);
+  const paint = () => {
+    const qq = (S.pq || '').toLowerCase(); const rs = L.filter((r) => (!qq || (r.title + ' ' + r.who).toLowerCase().includes(qq)) && (!S.pfr || (S.pfr === 'none' ? !['won', 'lost'].includes(res(r)) : res(r) === S.pfr)));
+    const t = el('table'); t.innerHTML = '<thead><tr><th>Дата</th><th style="text-align:left">Пресейл</th><th style="text-align:left">Хто веде</th><th>Годин</th><th>Етап у Worksection</th><th style="text-align:left">Результат</th></tr></thead>';
+    const b = el('tbody');
+    rs.forEach((r) => { const tr = el('tr'); const cur2 = res(r);
+      tr.append(el('td', 'mut', dd(r.added)));
+      const td = el('td', 'l'); td.style.whiteSpace = 'normal'; td.style.minWidth = '28ch'; const a = el('a', null, r.title); a.href = r.u; a.target = '_blank'; a.rel = 'noopener'; td.append(a);
+      if (r.hint && !cur2) { const hn = el('span', 'tsub', 'Можливо, виграно: ' + r.hint.project + ' — ' + N(r.hint.h) + ' год після пресейлу'); td.append(hn); }
+      if (r.kids) td.append(el('span', 'tsub', 'підзадач: ' + r.kids));
+      tr.append(td, el('td', 'l muted', r.who), el('td', null, N(r.h)), el('td', 'mut', r.stage || (r.state === 'IN WORK' ? 'в роботі' : r.state === 'DONE' ? 'DONE' : r.state || '—')));
+      const rc = el('td', 'l'); const g = el('div', 'res-row');
+      RES.forEach(([v, t2, cls, ic]) => { const bt = el('button', 'rb ' + cls); bt.type = 'button'; bt.setAttribute('aria-pressed', cur2 === v); bt.append(el('span', 'ic', ic), el('span', 'lb', t2)); bt.onclick = () => savePre(r, {result: cur2 === v ? '' : v}); g.append(bt); });
+      rc.append(g); const st = (S.preSave || {})[r.id]; if (st) rc.append(el('div', 'saved ' + (st === 'err' ? 'bad' : st === 'pending' ? 'mut' : 'good'), st === 'err' ? 'Не збережено' : st === 'pending' ? 'Зберігаю…' : '✓ Збережено'));
+      tr.append(rc); b.append(tr); });
+    if (!rs.length) { const tr = el('tr'); const x = el('td', 'l mut', 'Нічого не знайдено.'); x.colSpan = 6; tr.append(x); b.append(tr); }
+    t.append(b); tw.replaceChildren(t);
+  };
+  q.oninput = () => { S.pq = q.value; paint(); }; fr.onchange = () => { S.pfr = fr.value; paint(); };
+  paint(); pg.append(c2);
+  pg.append(el('p', 'note', 'Відсоток виграних = виграні ÷ (виграні + програні). «Можливо, виграно» — підказка: після пресейлу в проєкті з такою ж назвою клієнта з’явились години. Остаточно результат ставите ви.'));
+}
+
 /* ---------- наради ---------- */
 const STATUS = [['done', 'Виконано', 's-done', '✓'], ['part', 'Частково', 's-part', '½'], ['fail', 'Не виконано', 's-fail', '✕']];
 const markOf = (date, id) => S.marks[date + '_' + id] || {};
@@ -677,6 +741,7 @@ function howPage(pg) {
    ['Наради', 'Наради 1-го і 15-го числа. Вночі перед нарадою готуються по 4 рекомендації кожному керівнику з цифрою «було → ціль», а де є падаючі проєкти (годин стало на 30% і більше менше, ніж за ті ж дні минулого місяця, або не стало зовсім) — п’ята: вивести проєкт на години або заархівувати в Worksection. Ви відмічаєте поставлені задачі, а на наступній нараді — результат. Біля задачі видно поточне значення показника.'],
    ['Хвости', 'Вкладка «Хвости»: помісячно за місяцем створення, по проєктах і рух за місяць — скільки закрили, скільки додалось нових.'],
    ['Залученість', 'Індекс 0–100 за щоденною статистикою. Кожен робочий день оцінюється за тим, що реально зрушило, з вагою за впливом на гроші: оплата (переведення в PAID\\CLOSE) 40%, DONE-хвости 20%, прострочки 20%, приймання клієнтом 10%, порядок у задачах (без етапу, PAUSE, без типу оплати, без оцінки) 10%. Регулярні прострочки, що не зменшуються, дають 0, зростання — штраф. У комерції: оплата 50, DONE 25, приймання 15, порядок 10. Щоденні знімки зберігаються з 04.11.2026.'],
+   ['Пресейли', 'Усі задачі проєкту ADM_Пресейл. Результат «Виграли / Програли / Ще вирішується» ставите ви або Свідрук Наталя; відсоток виграних = виграні ÷ (виграні + програні). Контроль пресейлу — постійна 5-та задача Свідрук Наталі на кожній нараді.'],
    ['Оновлення', 'Щоночі о 02:00 з Worksection і дашборду менеджерів.']].forEach(([a, b]) => { dl.append(el('dt', null, a), el('dd', null, b)); });
   c.append(dl); pg.append(c);
 }
@@ -691,7 +756,7 @@ function draw() {
   if (prevOpen) { const b = el('span', 'badge', String(prevOpen)); b.title = 'Поставлені задачі без результату'; mtTab.append(b); }
   if (S.err) { pg.append(el('div', 'banner', S.err)); }
   if (!S.L.length) { if (!S.err) pg.append(el('p', 'muted', 'Завантаження даних…')); return; }
-  if (S.tab === 'mt') meetingsPage(pg); else if (S.tab === 'tl') tailsPage(pg); else if (S.tab === 'en') engPage(pg); else if (S.tab === 'how') howPage(pg); else overview(pg);
+  if (S.tab === 'mt') meetingsPage(pg); else if (S.tab === 'tl') tailsPage(pg); else if (S.tab === 'en') engPage(pg); else if (S.tab === 'ps') presalePage(pg); else if (S.tab === 'how') howPage(pg); else overview(pg);
 }
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; try { localStorage.setItem('ow_tab', S.tab); } catch (e) {} draw(); }));
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(draw, 200); });
@@ -699,8 +764,8 @@ let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTime
 async function load(meta) {
   const U = (meta && meta.urls) || {};
   const get = async (k) => { if (!U[k]) throw new Error('немає файлу ' + k); const r = await fetch(U[k]); if (!r.ok) throw new Error(k + ' ' + r.status); return r.json(); };
-  const [L, M, G, A, TT, HY, PD, HS] = await Promise.all([get('leaders'), get('months'), get('managers'), get('about'), U.tails ? get('tails').catch(() => []) : Promise.resolve([]), U.hyg ? get('hyg').catch(() => []) : Promise.resolve([]), U.paid_daily ? get('paid_daily').catch(() => []) : Promise.resolve([]), U.hist ? get('hist').catch(() => []) : Promise.resolve([])]);
-  S.L = L; S.M = M; S.G = G; S.A = A[0]; S.T = TT; S.Hy = HY; S.Pd = PD; S.Hs = HS;
+  const [L, M, G, A, TT, HY, PD, HS, PS] = await Promise.all([get('leaders'), get('months'), get('managers'), get('about'), U.tails ? get('tails').catch(() => []) : Promise.resolve([]), U.hyg ? get('hyg').catch(() => []) : Promise.resolve([]), U.paid_daily ? get('paid_daily').catch(() => []) : Promise.resolve([]), U.hist ? get('hist').catch(() => []) : Promise.resolve([]), U.presale ? get('presale').catch(() => []) : Promise.resolve([])]);
+  S.L = L; S.M = M; S.G = G; S.A = A[0]; S.T = TT; S.Hy = HY; S.Pd = PD; S.Hs = HS; S.Ps = PS;
   S.monthsList = (S.A.months || [...new Set(L.map((r) => r.month))]).slice().sort();
   if (!S.month || !S.monthsList.includes(S.month)) S.month = S.A.month;
   renderMonths();
@@ -714,6 +779,7 @@ async function load(meta) {
     S.db = db;
     db.doc('data/meta').onSnapshot((snap) => { if (snap.exists) load(snap.data()).catch((e) => { S.err = 'Не вдалося завантажити дані: ' + e.message; draw(); }); else { S.err = 'Даних ще немає — вони з’являться після нічного оновлення.'; draw(); } }, () => { S.err = 'Немає доступу до даних дашборду.'; draw(); });
     db.collection('meetings').onSnapshot((q) => { S.meetings = q.docs.map((d) => Object.assign({date: d.id}, d.data())); draw(); }, () => {});
+    db.collection('presale').onSnapshot((q) => { const m = {}; q.docs.forEach((d) => { m[d.id] = d.data(); }); S.pre = m; draw(); }, () => {});
     db.collection('eng').onSnapshot((q) => { S.eng = q.docs.map((d) => Object.assign({date: d.id}, d.data())); draw(); }, () => {});
     db.collection('marks').onSnapshot((q) => { const m = {}; q.docs.forEach((d) => { m[d.id] = d.data(); }); S.marks = m; draw(); }, () => {});
   } catch (e) { S.err = 'Помилка завантаження: ' + (e && e.message || e); draw(); }
