@@ -1,0 +1,431 @@
+<title>Дашборд власника We.Code</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Шар керівника: зверху — місяць і компанія, далі картки керівників, наради — окрема вкладка */
+:root{--bg:#f6f6f3;--panel:#fff;--fg:#1d1f22;--muted:#686b70;--line:#e2e1db;--acc:#2f5d8a;--accbg:#e6eef6;--ok:#2d7a4b;--okbg:#e3f1e8;--warn:#9a6511;--warnbg:#f7ecd8;--bad:#b0402c;--badbg:#f7e3de;--ref:#8d8f93;
+ --c1:#2a78d6;--c2:#e2672f;--c3:#1a9e72;--c4:#c98a00;--c5:#7b5fd6;
+ --serif:Georgia,"Iowan Old Style","Times New Roman",serif;--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#18191b;--panel:#222326;--fg:#ebeae6;--muted:#a2a39f;--line:#38393c;--acc:#8fb4e6;--accbg:#22303f;--ok:#6cc08d;--okbg:#1f3328;--warn:#e0b25a;--warnbg:#3a2f1c;--bad:#ea8571;--badbg:#3d2621;--ref:#8a8b8f;--c1:#4f95ea;--c2:#ee8452;--c3:#3bbd8e;--c4:#e0a524;--c5:#9d86ee;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#18191b;--panel:#222326;--fg:#ebeae6;--muted:#a2a39f;--line:#38393c;--acc:#8fb4e6;--accbg:#22303f;--ok:#6cc08d;--okbg:#1f3328;--warn:#e0b25a;--warnbg:#3a2f1c;--bad:#ea8571;--badbg:#3d2621;--ref:#8a8b8f;--c1:#4f95ea;--c2:#ee8452;--c3:#3bbd8e;--c4:#e0a524;--c5:#9d86ee;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--sans);font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding-block:20px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+h1{font:400 28px/1.15 var(--serif);margin:0;text-wrap:balance}
+h2{font-size:16px;margin:0;text-wrap:balance}h3{font-size:14px;margin:0}
+.muted{color:var(--muted)}.note{color:var(--muted);font-size:12px;margin:0}
+.top{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;justify-content:space-between}
+.top .tl{display:grid;gap:4px;min-width:0}
+.ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select,button,input,textarea{font:inherit;color:var(--fg)}
+select{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 14px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.tab[aria-selected=true]{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
+.tab:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.badge{background:var(--bad);color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:0 6px;line-height:18px}
+.take{margin:0;font-size:15px;max-width:90ch}
+.tiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0;display:grid;gap:8px;align-content:start}
+.tile .lab{font-size:12px;color:var(--muted)}.tile .big{font:400 26px/1.1 var(--serif)}.tile .sm{font-size:12px;color:var(--muted)}
+.good{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.mut{color:var(--muted)}
+.sec{display:grid;gap:10px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr))}
+.leaders{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,19rem),1fr))}
+.lc .hd{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:12.5px}
+.kv span:nth-child(odd){color:var(--muted)}.kv b{font-weight:600}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600}
+.pill.good{background:var(--okbg)}.pill.warn{background:var(--warnbg)}.pill.bad{background:var(--badbg)}.pill.mut{background:var(--bg)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:right;color:var(--muted);font-weight:600;font-size:11px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:bottom}
+td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child,td.l{text-align:left}
+td .who{font-weight:600}td .ar{display:block;color:var(--muted);white-space:normal;min-width:12ch;font-size:11.5px}
+.chart{position:relative}.chart svg{display:block}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14);padding:6px 10px;font-size:12px;white-space:nowrap;z-index:2}
+.tip .t{color:var(--muted);margin-bottom:2px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.lg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+dl{display:grid;grid-template-columns:minmax(9rem,max-content) 1fr;gap:8px 16px;margin:0;font-size:13px}dt{font-weight:600}dd{margin:0;color:var(--muted)}
+@media (max-width:560px){dl{grid-template-columns:1fr}}
+.banner{border:1px solid var(--line);background:var(--accbg);border-radius:10px;padding:10px 14px;font-size:13px}
+/* наради */
+.mt-head{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.mt-sum{display:flex;flex-wrap:wrap;gap:6px}
+.rec{border-top:1px solid var(--line);padding-top:10px;display:grid;gap:6px}
+.rec:first-of-type{border-top:0;padding-top:0}
+.rec .tx{font-size:13.5px}
+.rec .tag{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.prog{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted);align-items:center}
+.prog b{color:var(--fg);font-weight:600}
+.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--panel);padding:4px 10px;cursor:pointer;font-size:12.5px;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true].s-done{background:var(--okbg);color:var(--ok);font-weight:600}
+.seg button[aria-pressed=true].s-part{background:var(--warnbg);color:var(--warn);font-weight:600}
+.seg button[aria-pressed=true].s-fail{background:var(--badbg);color:var(--bad);font-weight:600}
+.asg{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:4px 10px;background:var(--panel)}
+.asg input{margin:0}
+.asg.on{border-color:var(--acc);color:var(--acc);font-weight:600;background:var(--accbg)}
+.notein{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:6px 8px;font-size:12.5px;resize:vertical;min-height:32px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:10px;font-size:13px;z-index:9}
+</style>
+<div class="wrap">
+  <div class="top">
+    <div class="tl"><h1>Дашборд власника We.Code</h1><p class="note" id="asof">Завантаження даних…</p></div>
+    <div class="ctrl">
+      <label class="note" for="msel">Місяць</label><select id="msel" aria-label="Місяць"></select>
+    </div>
+  </div>
+  <div class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" data-t="ov" id="tab-ov">Огляд</button>
+    <button class="tab" role="tab" data-t="mt" id="tab-mt">Наради й задачі</button>
+    <button class="tab" role="tab" data-t="how" id="tab-how">Як рахується</button>
+  </div>
+  <div id="page"></div>
+</div>
+<script>
+(() => {
+const S = {tab: 'ov', month: '', L: [], M: [], G: [], A: null, meetings: [], marks: {}, mt: '', db: null, me: null, err: ''};
+try { const t = localStorage.getItem('ow_tab'); if (t) S.tab = t; } catch (e) {}
+if (['ov', 'mt', 'how'].includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
+const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+const nf = new Intl.NumberFormat('uk-UA', {maximumFractionDigits: 0});
+const N = (v) => v == null ? '—' : nf.format(v), H = (v) => v == null ? '—' : nf.format(v) + ' год', P = (v) => v == null ? '—' : v + '%';
+const SG = (v) => v == null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '±') + nf.format(Math.abs(v)) + ' год';
+const MS = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'гру'];
+const MF = ['січень', 'лютий', 'березень', 'квітень', 'травень', 'червень', 'липень', 'серпень', 'вересень', 'жовтень', 'листопад', 'грудень'];
+const MG = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+const ms = (m) => MS[+m.slice(5, 7) - 1] + ' ' + m.slice(2, 4), mf = (m) => MF[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4), mg = (m) => MG[+m.slice(5, 7) - 1];
+const dd = (d) => d ? d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4) : '—';
+const before = (m) => { let y = +m.slice(0, 4), k = +m.slice(5, 7) - 1; if (!k) { y--; k = 12; } return y + '-' + String(k).padStart(2, '0'); };
+const uC = (v) => v == null ? 'mut' : v >= 80 ? 'good' : v >= 50 ? 'warn' : 'bad';
+const pC = (v) => v == null ? 'mut' : v >= 100 ? 'good' : v >= 85 ? 'warn' : 'bad';
+const ORDER = ['marina', 'anna', 'svitlana', 'lcw', 'natalia'];
+const COL = {marina: 'var(--c1)', anna: 'var(--c2)', svitlana: 'var(--c3)', lcw: 'var(--c4)', natalia: 'var(--c5)'};
+const NAMES = {marina: 'Марина Васильєва', anna: 'Анна Воропаєва', svitlana: 'Світлана Степура', lcw: 'Іван Губченко', natalia: 'Свідрук Наталя'};
+const toast = (t) => { const x = el('div', 'toast', t); document.body.append(x); setTimeout(() => x.remove(), 2600); };
+const cur = () => S.A ? S.A.month : '';
+const rowsOf = (m) => S.L.filter((r) => r.month === m).sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
+
+function company(m) {
+  const L = rowsOf(m), d = L.filter((r) => r.kind === 'direction');
+  const s = (k, rs = d) => rs.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+  const pl = d.filter((r) => r.plan);
+  const isCur = m === cur();
+  // утилізація: для закритого місяця — сам місяць, для поточного — минулий
+  const um = isCur ? before(m) : m;
+  const umr = S.M.filter((r) => r.month === um && r.key !== 'natalia');
+  const t = s('tails_h'), tp = s('prev_tails_h');
+  return {isCur, um, fact: s('fact'), prev_fact: s('prev_fact'), forecast: s('forecast', pl), plan: s('plan', pl),
+    fpct: s('plan', pl) ? Math.round(s('forecast', pl) / s('plan', pl) * 100) : null,
+    paid: s('paid_h', umr), util: s('fact', umr) ? Math.round(s('paid_h', umr) / s('fact', umr) * 100) : null,
+    tails: t, tdelta: d.every((r) => r.prev_tails_h != null) ? Math.round(t - tp) : null, done: s('tails_done_h'), overdue: s('overdue')};
+}
+
+/* ---------- огляд ---------- */
+function overview(pg) {
+  const m = S.month, c = company(m), isCur = c.isCur;
+  if (!rowsOf(m).length) { pg.append(el('p', 'muted', 'Немає даних за цей місяць.')); return; }
+  if (!isCur) pg.append(el('div', 'banner', 'Закритий місяць ' + mf(m) + ': факт на кінець місяця. Утилізація — частка годин ' + mg(m) + ', які вже оплачені станом на ' + dd(S.A.date) + ', тож вона ще може зрости.'));
+  const take = el('p', 'take');
+  const a = c.fpct == null ? '' : (isCur ? 'Напрями йдуть на ' : 'Напрями закрили місяць на ') + c.fpct + '% плану';
+  const b = c.util == null ? '' : ', оплачено ' + c.util + '% годин ' + (isCur ? 'минулого місяця' : 'цього місяця');
+  const t = c.tdelta == null ? '.' : '; хвости ' + (c.tdelta > 0 ? 'зросли на ' : 'зменшились на ') + N(Math.abs(c.tdelta)) + ' год за місяць.';
+  take.textContent = a + b + t; pg.append(take);
+
+  const tiles = el('div', 'tiles');
+  const tile = (lab, big, cls, sm, smcls) => { const d = el('div', 'card tile'); d.append(el('span', 'lab', lab), el('span', 'big ' + (cls || ''), big), el('span', 'sm ' + (smcls || ''), sm)); tiles.append(d); };
+  tile(isCur ? 'Прогноз до плану напрямів' : 'Виконання плану напрямів', P(c.fpct), pC(c.fpct), N(c.forecast) + ' з ' + N(c.plan) + ' год плану');
+  tile('Годин за ' + (isCur ? 'місяць (поки)' : 'місяць'), H(c.fact), '', 'місяць до того — ' + H(c.prev_fact));
+  tile('Утилізація: ' + mf(c.um), P(c.util), uC(c.util), 'оплачено ' + N(c.paid) + ' год, мета 80%');
+  tile('Хвости минулих місяців', H(c.tails), '', c.tdelta == null ? '—' : SG(c.tdelta) + ' за місяць', c.tdelta > 0 ? 'bad' : 'good');
+  tile('Здано, не оплачено (DONE)', H(c.done), '', 'хвости в етапі DONE');
+  tile('Прострочені задачі', N(c.overdue), '', 'відкриті задачі з минулим строком');
+  const s1 = el('section', 'sec'); s1.append(el('h2', null, 'Компанія загалом'), tiles); pg.append(s1);
+
+  const s2 = el('section', 'sec'); s2.append(el('h2', null, 'Керівники'));
+  const box = el('div', 'leaders');
+  for (const r of rowsOf(m)) box.append(leaderCard(r, isCur));
+  s2.append(box); pg.append(s2);
+
+  pg.append(compareTable(m, isCur));
+  const s3 = el('section', 'sec'); s3.append(el('h2', null, 'Динаміка по місяцях'), el('p', 'note', 'Вибраний місяць підсвічено. Поточний місяць ще не закритий — він світлішим.'));
+  const g = el('div', 'grid');
+  g.append(chartCard('Години напрямів', 'Факт годин до норми; пунктир — сума планів напрямів.', (el2) => hoursChart(el2)));
+  g.append(chartCard('Утилізація', 'Частка годин місяця на задачах, які вже в PAID\\CLOSE. Мета 80%.', (el2) => lineChart(el2, 'util', (v) => v + '%', 80)));
+  g.append(chartCard('Хвости на кінець місяця', 'Години в незакритих задачах, створених до цього місяця.', (el2) => lineChart(el2, 'tails_h', N, 0)));
+  s3.append(g); pg.append(s3);
+  pg.append(managersTable(m, isCur));
+}
+
+function leaderCard(r, isCur) {
+  const c = el('article', 'card lc'); c.id = 'leader-' + r.key;
+  const hd = el('div', 'hd'); hd.append(el('h3', null, r.leader));
+  const useU = r.kind === 'commerce' || r.forecast_pct == null;
+  const uval = isCur ? r.prev_util : r.util;
+  hd.append(el('span', 'pill ' + (useU ? uC(uval) : pC(r.forecast_pct)), useU ? 'утилізація ' + P(uval) : (isCur ? 'прогноз ' : 'план ') + P(r.forecast_pct)));
+  c.append(hd, el('div', 'note', r.area + (r.people ? ' · ' + r.people + (r.kind === 'commerce' ? ' менеджерів' : ' людей') : '')));
+  const kv = el('div', 'kv');
+  const add = (k, v, cls) => { kv.append(el('span', null, k)); kv.append(el('b', cls || '', v)); };
+  if (r.kind === 'commerce') {
+    add('Години по проєктах', H(r.fact)); add('Місяць до того', H(r.prev_fact));
+    add('Утилізація ' + (isCur ? 'минулого місяця' : 'місяця'), P(uval), uC(uval));
+    if (isCur) add('Утилізація зараз', P(r.util), 'mut');
+  } else {
+    add('План / факт', (r.plan ? N(r.plan) : 'без плану') + ' / ' + H(r.fact));
+    if (isCur) add('Прогноз на кінець місяця', H(r.forecast) + (r.forecast_pct != null ? ' · ' + r.forecast_pct + '%' : ''), pC(r.forecast_pct));
+    add('Місяць до того', H(r.prev_fact) + (r.prev_pct != null ? ' · ' + r.prev_pct + '% плану' : ''));
+    add('Утилізація ' + (isCur ? 'минулого місяця' : 'місяця'), P(uval), uC(uval));
+  }
+  const d = r.tails_h != null && r.prev_tails_h != null ? Math.round(r.tails_h - r.prev_tails_h) : null;
+  add('Хвости', H(r.tails_h) + (d != null ? ' (' + SG(d) + ')' : ''), d > 0 ? 'bad' : d < 0 ? 'good' : '');
+  add('З них DONE — чекають оплати', H(r.tails_done_h), r.tails_done_h > 200 ? 'warn' : '');
+  if (r.kind !== 'commerce') { add('Прострочені задачі', N(r.overdue), r.overdue > 20 ? 'bad' : r.overdue > 5 ? 'warn' : ''); add('Під ризиком недобору норми', N(r.at_risk) + ' з ' + N(r.people)); }
+  else add('Проєктів без менеджера', N(r.unassigned), r.unassigned ? 'warn' : '');
+  c.append(kv);
+  // відкриті задачі з нарад
+  const open = openTasks(r.key);
+  if (open.n) { const x = el('div', 'note'); x.append('Задачі з нарад: '); x.append(el('b', open.fail ? 'bad' : '', open.done + ' з ' + open.n + ' виконано')); c.append(x); }
+  const mini = el('div', 'chart'); c.append(el('div', 'note', 'Утилізація по місяцях (пунктир — 80%)'), mini);
+  requestAnimationFrame(() => miniUtil(mini, r.key));
+  return c;
+}
+
+function compareTable(m, isCur) {
+  const c = el('div', 'card'); c.append(el('h2', null, 'Порівняння керівників'), el('p', 'note', (isCur ? 'Поточний місяць наростаючим підсумком; утилізація — за минулий місяць.' : 'Підсумок місяця; утилізація — за цей місяць станом на сьогодні.') + ' У комерції години — усі години по проєктах менеджерів.'));
+  const t = el('table'); const th = el('thead'); const hr = el('tr');
+  ['Керівник', 'План, год', 'Факт, год', isCur ? 'Прогноз до плану' : 'Виконання плану', 'Місяць до того', 'Утилізація', 'Хвости, год', 'За місяць', 'З них DONE', 'Прострочено', 'Індекс'].forEach((x) => hr.append(el('th', null, x)));
+  th.append(hr); t.append(th); const tb = el('tbody');
+  for (const r of rowsOf(m)) {
+    const tr = el('tr'); const td = (v, cls) => { const x = el('td', cls || '', v); tr.append(x); };
+    const f = el('td'); f.append(el('span', 'who', r.leader), el('span', 'ar', r.area)); tr.append(f);
+    const u = isCur ? r.prev_util : r.util; const d = r.tails_h != null && r.prev_tails_h != null ? Math.round(r.tails_h - r.prev_tails_h) : null;
+    td(r.plan == null ? '—' : N(r.plan)); td(N(r.fact)); td(P(r.forecast_pct), pC(r.forecast_pct)); td(P(r.prev_pct), pC(r.prev_pct)); td(P(u), uC(u));
+    td(N(r.tails_h)); td(d == null ? '—' : SG(d), d > 0 ? 'bad' : d < 0 ? 'good' : ''); td(N(r.tails_done_h)); td(N(r.overdue));
+    td(r.health == null ? '—' : N(r.health), r.health == null ? '' : r.health >= 75 ? 'good' : r.health >= 60 ? 'warn' : 'bad');
+    tb.append(tr);
+  }
+  t.append(tb); const w = el('div', 'tw'); w.append(t); c.append(w); return c;
+}
+
+function managersTable(m, isCur) {
+  const c = el('div', 'card'); c.id = 'commerce';
+  c.append(el('h2', null, 'Комерція: менеджери проєктів · ' + mf(m)), el('p', 'note', 'Свідрук Наталя — зведено по всіх менеджерах. Хвости — незакриті задачі минулих місяців на кінець місяця.'));
+  const R = S.G.filter((r) => r.month === m).sort((a, b) => (b.tails_h || 0) - (a.tails_h || 0));
+  const t = el('table'); const th = el('thead'); const hr = el('tr');
+  ['Менеджер', 'Проєктів', 'Хвости, год', 'DONE, год', 'DONE, задач', 'TESTING BY CLIENT, год', 'Години міс.', 'Утилізація міс.', isCur ? 'Утилізація мин. міс.' : 'Місяць до того'].forEach((x) => hr.append(el('th', null, x)));
+  th.append(hr); t.append(th); const tb = el('tbody');
+  R.forEach((r) => { const tr = el('tr'); const td = (v, cls) => tr.append(el('td', cls || '', v));
+    td(r.manager, 'l'); td(N(r.projects)); td(N(r.tails_h)); td(N(r.tails_done_h), r.tails_done_h > 200 ? 'warn' : ''); td(N(r.tails_done_n)); td(N(r.tails_testing_h));
+    td(N(r.labor_h)); td(P(r.util), isCur ? 'mut' : uC(r.util)); td(P(r.prev_util), uC(r.prev_util)); tb.append(tr); });
+  if (!R.length) { const tr = el('tr'); const x = el('td', 'l mut', 'Немає даних за цей місяць.'); x.colSpan = 9; tr.append(x); tb.append(tr); }
+  t.append(tb); const w = el('div', 'tw'); w.append(t); c.append(w); return c;
+}
+
+/* ---------- графіки ---------- */
+const NS = 'http://www.w3.org/2000/svg';
+const svgEl = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+function chartCard(title, note, draw) {
+  const c = el('div', 'card'); c.append(el('h3', null, title), el('p', 'note', note));
+  const lg = el('div', 'lg'); const ch = el('div', 'chart'); c.append(lg, ch);
+  requestAnimationFrame(() => draw(ch, lg)); return c;
+}
+function tipOf(box) { let t = box.querySelector('.tip'); if (!t) { t = el('div', 'tip'); t.hidden = true; box.append(t); } return t; }
+function showTip(box, ev, title, lines) {
+  const t = tipOf(box); t.replaceChildren(el('div', 't', title));
+  lines.forEach(([col, name, val]) => { const d = el('div'); const i = el('i', 'sw'); i.style.background = col; d.append(i, name + ': ' + val); t.append(d); });
+  t.hidden = false; const r = box.getBoundingClientRect(); let x = ev.clientX - r.left + 12; if (x + t.offsetWidth > r.width) x = Math.max(0, ev.clientX - r.left - t.offsetWidth - 12);
+  t.style.left = x + 'px'; t.style.top = Math.max(0, ev.clientY - r.top - 12) + 'px';
+}
+function legend(lg, keys) { lg.replaceChildren(); keys.forEach((k) => { const s = el('span'); const i = el('i', 'sw'); i.style.background = COL[k]; s.append(i, NAMES[k]); lg.append(s); }); }
+function axes(svg, W, H, m, max, fmt, months, xc) {
+  const y = (v) => H - m.b - (H - m.t - m.b) * v / max;
+  const step = Math.pow(10, Math.floor(Math.log10(max / 4 || 1))); const nice = [1, 2, 2.5, 5, 10].map((k) => k * step).find((k) => max / k <= 5) || step * 10;
+  for (let v = 0; v <= max; v += nice) { svg.append(svgEl('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: 'var(--line)'})); const tx = svgEl('text', {x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--muted)'}); tx.textContent = fmt(v); svg.append(tx); }
+  months.forEach((mm) => { const tx = svgEl('text', {x: xc(mm), y: H - 6, 'text-anchor': 'middle', 'font-size': 11, fill: mm === S.month ? 'var(--fg)' : 'var(--muted)', 'font-weight': mm === S.month ? 700 : 400}); tx.textContent = ms(mm); svg.append(tx); });
+  return y;
+}
+function frame(box, H) { box.querySelectorAll('svg').forEach((s) => s.remove()); const W = Math.max(280, box.clientWidth || 480); const svg = svgEl('svg', {width: '100%', viewBox: `0 0 ${W} ${H}`, role: 'img'}); box.prepend(svg); return {svg, W}; }
+function hoursChart(box, lg) {
+  const keys = ['marina', 'anna', 'svitlana', 'lcw']; legend(box.previousSibling, keys);
+  const rows = S.M.filter((r) => keys.includes(r.key)); const months = [...new Set(rows.map((r) => r.month))].sort();
+  const HH = 230, m = {l: 48, r: 8, t: 12, b: 24}; const {svg, W} = frame(box, HH);
+  const tot = (mm) => rows.filter((r) => r.month === mm).reduce((a, r) => a + (r.fact || 0), 0), plan = (mm) => rows.filter((r) => r.month === mm).reduce((a, r) => a + (r.plan || 0), 0);
+  const max = Math.max(1, ...months.map((mm) => Math.max(tot(mm), plan(mm)))) * 1.08;
+  const bandW = (W - m.l - m.r) / months.length, bw = Math.min(34, bandW * 0.55); const xc = (mm) => m.l + bandW * (months.indexOf(mm) + 0.5);
+  const y = axes(svg, W, HH, m, max, (v) => nf.format(v), months, xc);
+  months.forEach((mm) => {
+    let acc = 0; const part = rows.some((r) => r.month === mm && r.partial);
+    if (mm === S.month) svg.append(svgEl('rect', {x: xc(mm) - bandW / 2 + 2, width: bandW - 4, y: m.t, height: HH - m.t - m.b, fill: 'var(--accbg)', rx: 6}));
+    keys.forEach((k) => { const r = rows.find((x) => x.month === mm && x.key === k); const v = r ? r.fact || 0 : 0; if (!v) return;
+      const rc = svgEl('rect', {x: xc(mm) - bw / 2, width: bw, y: y(acc + v), height: Math.max(0, y(acc) - y(acc + v)), fill: COL[k], opacity: part ? 0.4 : 0.9}); svg.append(rc); acc += v; });
+    if (plan(mm)) svg.append(svgEl('line', {x1: xc(mm) - bw / 2 - 5, x2: xc(mm) + bw / 2 + 5, y1: y(plan(mm)), y2: y(plan(mm)), stroke: 'var(--ref)', 'stroke-width': 2, 'stroke-dasharray': '4 3'}));
+    const hit = svgEl('rect', {x: xc(mm) - bandW / 2, width: bandW, y: m.t, height: HH - m.t - m.b, fill: 'transparent'});
+    hit.addEventListener('mousemove', (ev) => showTip(box, ev, mf(mm) + (part ? ' (триває)' : ''), keys.map((k) => { const r = rows.find((x) => x.month === mm && x.key === k); return [COL[k], NAMES[k], H(r ? r.fact : null)]; }).concat(plan(mm) ? [['var(--ref)', 'План', H(plan(mm))]] : [])));
+    hit.addEventListener('mouseleave', () => { tipOf(box).hidden = true; }); hit.addEventListener('click', () => setMonth(mm)); svg.append(hit);
+  });
+}
+function lineChart(box, field, fmt, ref) {
+  legend(box.previousSibling, ORDER);
+  const rows = S.M.filter((r) => r[field] != null); const months = [...new Set(S.M.map((r) => r.month))].sort().filter((mm) => rows.some((r) => r.month === mm));
+  const HH = 230, m = {l: 48, r: 14, t: 12, b: 24}; const {svg, W} = frame(box, HH);
+  const max = Math.max(ref || 0, ...rows.map((r) => r[field]), 1) * 1.1;
+  const xc = (mm) => months.length < 2 ? (W / 2) : m.l + 18 + (W - m.l - m.r - 36) * months.indexOf(mm) / (months.length - 1);
+  if (months.includes(S.month)) svg.append(svgEl('rect', {x: xc(S.month) - 18, width: 36, y: m.t, height: HH - m.t - m.b, fill: 'var(--accbg)', rx: 6}));
+  const y = axes(svg, W, HH, m, max, fmt, months, xc);
+  if (ref) svg.append(svgEl('line', {x1: m.l, x2: W - m.r, y1: y(ref), y2: y(ref), stroke: 'var(--ref)', 'stroke-dasharray': '4 3'}));
+  ORDER.forEach((k) => { const pts = rows.filter((r) => r.key === k).sort((a, b) => a.month.localeCompare(b.month)); if (!pts.length) return;
+    svg.append(svgEl('path', {d: pts.map((r, i) => (i ? 'L' : 'M') + xc(r.month) + ',' + y(r[field])).join(''), fill: 'none', stroke: COL[k], 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round'}));
+    pts.forEach((r) => svg.append(svgEl('circle', {cx: xc(r.month), cy: y(r[field]), r: 3.5, fill: r.partial ? 'var(--panel)' : COL[k], stroke: COL[k], 'stroke-width': 1.5}))); });
+  months.forEach((mm) => { const hit = svgEl('rect', {x: xc(mm) - 24, width: 48, y: m.t, height: HH - m.t - m.b, fill: 'transparent'});
+    hit.addEventListener('mousemove', (ev) => showTip(box, ev, mf(mm), ORDER.map((k) => rows.find((r) => r.key === k && r.month === mm)).filter(Boolean).map((r) => [COL[r.key], NAMES[r.key], fmt(r[field])])));
+    hit.addEventListener('mouseleave', () => { tipOf(box).hidden = true; }); hit.addEventListener('click', () => setMonth(mm)); svg.append(hit); });
+}
+function miniUtil(box, key) {
+  const pts = S.M.filter((r) => r.key === key && r.util != null).sort((a, b) => a.month.localeCompare(b.month)); if (!pts.length) return;
+  const H = 70, W = Math.max(220, box.clientWidth || 280); const svg = svgEl('svg', {width: '100%', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Утилізація по місяцях'}); box.replaceChildren(svg);
+  const top = 16, base = H - 16, y = (v) => base - (base - top) * Math.min(100, v) / 100, bw = W / pts.length;
+  svg.append(svgEl('line', {x1: 0, x2: W, y1: y(80), y2: y(80), stroke: 'var(--ref)', 'stroke-dasharray': '4 3'}));
+  pts.forEach((r, i) => { const x = bw * i + bw * 0.25, w = bw * 0.5;
+    svg.append(svgEl('rect', {x, width: w, y: y(r.util), height: base - y(r.util), rx: 3, fill: COL[key], opacity: r.partial ? 0.35 : r.month === S.month ? 1 : 0.75}));
+    const v = svgEl('text', {x: x + w / 2, y: y(r.util) - 3, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--fg)'}); v.textContent = r.util + '%'; svg.append(v);
+    const t = svgEl('text', {x: x + w / 2, y: H - 3, 'text-anchor': 'middle', 'font-size': 10, fill: r.month === S.month ? 'var(--fg)' : 'var(--muted)', 'font-weight': r.month === S.month ? 700 : 400}); t.textContent = ms(r.month); svg.append(t); });
+}
+
+/* ---------- наради ---------- */
+const STATUS = [['done', 'Виконано', 's-done'], ['part', 'Частково', 's-part'], ['fail', 'Не виконано', 's-fail']];
+const markOf = (date, id) => S.marks[date + '_' + id] || {};
+function openTasks(key) {
+  let n = 0, done = 0, fail = 0;
+  for (const mt of S.meetings) for (const it of (mt.items || [])) { if (it.key !== key) continue; const mk = markOf(mt.date, it.id); if (!mk.assigned) continue; n++; if (mk.status === 'done') done++; if (mk.status === 'fail') fail++; }
+  return {n, done, fail};
+}
+function liveValue(it) { const r = S.L.find((x) => x.month === cur() && x.key === it.key); return r && it.metric ? r[it.metric] : null; }
+function verdict(it, v) { if (v == null || it.target == null) return null; return it.op === '>=' ? v >= it.target : v <= it.target; }
+async function saveMark(date, it, patch) {
+  if (!S.db) { toast('Щоб відмічати задачі, відкрийте дашборд, увійшовши в claude.ai.'); return; }
+  const id = date + '_' + it.id; const doc = Object.assign({meeting: date, rec: it.id, key: it.key, assigned: false, status: '', note: ''}, S.marks[id] || {}, patch, {at: new Date().toISOString()});
+  S.marks[id] = doc; draw();
+  try { await S.db.doc('marks/' + id).set(doc); } catch (e) { toast('Не вдалося зберегти. Спробуйте ще раз.'); }
+}
+function meetingsPage(pg) {
+  const list = [...S.meetings].sort((a, b) => b.date.localeCompare(a.date));
+  const next = nextMeeting();
+  if (!list.length) {
+    const c = el('div', 'card'); c.append(el('h2', null, 'Наради 1-го і 15-го числа'), el('p', 'muted', 'Рекомендацій ще немає. Вони з’являються вночі перед нарадою: по 4 на кожного керівника.')); pg.append(c); return;
+  }
+  if (!S.mt || !list.some((x) => x.date === S.mt)) S.mt = list[0].date;
+  const mt = list.find((x) => x.date === S.mt); const prevMt = list[list.indexOf(mt) + 1];
+  const head = el('div', 'mt-head');
+  const l = el('div'); l.append(el('h2', null, 'Нарада ' + dd(mt.date)), el('p', 'note', 'Період: ' + (mt.period ? mf(mt.period) : '—') + ' · дані на ' + dd(mt.data_date) + ' · наступна нарада ' + dd(next)));
+  const sel = el('select'); sel.id = 'mtsel'; sel.setAttribute('aria-label', 'Нарада'); list.forEach((x) => sel.append(new Option('Нарада ' + dd(x.date), x.date))); sel.value = S.mt; sel.onchange = () => { S.mt = sel.value; draw(); };
+  head.append(l, sel); pg.append(head);
+  pg.append(el('div', 'banner', 'Як працювати: на нараді відмітьте «Поставлено» для задач, які доручили керівнику. На наступній нараді відкрийте цю ж нараду і поставте результат — «Виконано», «Частково» або «Не виконано». Біля задачі з цифрою видно, де показник зараз і яка ціль.'));
+  if (prevMt) pg.append(meetingBlock(prevMt, true));
+  pg.append(meetingBlock(mt, false));
+}
+function meetingBlock(mt, isPrev) {
+  const s = el('section', 'sec');
+  const items = mt.items || [];
+  const assigned = items.filter((it) => markOf(mt.date, it.id).assigned);
+  const done = assigned.filter((it) => markOf(mt.date, it.id).status === 'done').length;
+  s.append(el('h2', null, isPrev ? 'Перевірка задач з наради ' + dd(mt.date) : 'Рекомендації на цю нараду'));
+  s.append(el('p', 'note', isPrev ? 'Поставлено ' + assigned.length + ' задач, виконано ' + done + '. Поставте результат по кожній.' : 'По 4 рекомендації кожному керівнику. Поставлено: ' + assigned.length + ' з ' + items.length + '.'));
+  const box = el('div', 'leaders');
+  ORDER.forEach((k) => {
+    let its = items.filter((it) => it.key === k); if (isPrev) its = its.filter((it) => markOf(mt.date, it.id).assigned);
+    if (!its.length) return;
+    const c = el('article', 'card'); const hd = el('div', 'hd'); hd.style.display = 'flex'; hd.style.justifyContent = 'space-between'; hd.style.gap = '8px';
+    hd.append(el('h3', null, NAMES[k])); const st = its.filter((it) => markOf(mt.date, it.id).status === 'done').length;
+    if (isPrev) hd.append(el('span', 'pill ' + (st === its.length ? 'good' : st ? 'warn' : 'bad'), st + ' з ' + its.length));
+    c.append(hd);
+    its.forEach((it) => c.append(recRow(mt, it, isPrev)));
+    box.append(c);
+  });
+  if (!box.children.length) box.append(el('p', 'muted', 'На тій нараді задачі не відмічені як поставлені.'));
+  s.append(box); return s;
+}
+function recRow(mt, it, isPrev) {
+  const r = el('div', 'rec'); const mk = markOf(mt.date, it.id);
+  if (it.section) r.append(el('span', 'tag', it.section));
+  r.append(el('div', 'tx', it.text));
+  if (it.metric) {
+    const v = liveValue(it); const ok = verdict(it, v); const pr = el('div', 'prog');
+    const u = it.unit || '';
+    pr.append(el('span', null, 'Було '), el('b', null, N(it.base) + u), el('span', null, '→ зараз '), el('b', ok == null ? '' : ok ? 'good' : 'bad', N(v) + u), el('span', null, '· ціль ' + (it.op === '>=' ? '≥ ' : '≤ ') + N(it.target) + u));
+    if (ok != null) pr.append(el('span', 'pill ' + (ok ? 'good' : 'mut'), ok ? 'ціль досягнута' : 'ще ні'));
+    r.append(pr);
+  }
+  const acts = el('div', 'acts');
+  const lab = el('label', 'asg' + (mk.assigned ? ' on' : '')); const cb = el('input'); cb.type = 'checkbox'; cb.id = 'a-' + mt.date + '-' + it.id; cb.checked = !!mk.assigned; cb.onchange = () => saveMark(mt.date, it, {assigned: cb.checked}); lab.append(cb, 'Поставлено');
+  acts.append(lab);
+  if (mk.assigned || isPrev) {
+    const seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Результат');
+    STATUS.forEach(([v, t, cls]) => { const b = el('button', cls, t); b.type = 'button'; b.setAttribute('aria-pressed', mk.status === v); b.onclick = () => saveMark(mt.date, it, {assigned: true, status: mk.status === v ? '' : v}); seg.append(b); });
+    acts.append(seg);
+  }
+  r.append(acts);
+  if (mk.assigned) {
+    const ta = el('textarea', 'notein'); ta.id = 'n-' + mt.date + '-' + it.id; ta.placeholder = 'Коментар: строк, що домовились'; ta.value = mk.note || ''; ta.rows = 1;
+    ta.onchange = () => saveMark(mt.date, it, {note: ta.value.trim()}); r.append(ta);
+  }
+  return r;
+}
+function nextMeeting() { const t = new Date(); const y = t.getFullYear(), m = t.getMonth(), d = t.getDate(); const f = (Y, M, D) => Y + '-' + String(M + 1).padStart(2, '0') + '-' + String(D).padStart(2, '0'); if (d < 15) return f(y, m, 15); return m === 11 ? f(y + 1, 0, 1) : f(y, m + 1, 1); }
+
+function howPage(pg) {
+  const c = el('div', 'card'); c.append(el('h2', null, 'Як рахуються показники'));
+  const dl = el('dl');
+  [['Місяць', 'Перемикач угорі. Поточний місяць — наростаючим підсумком із прогнозом, закритий — підсумок на кінець місяця. На нараді 1-го числа зручно вибрати минулий місяць.'],
+   ['Прогноз до плану', 'Години до норми за темпом звичайного робочого дня × робочі дні, що залишились, ÷ план напряму. Перші дні місяця прогноз ще «стрибає». У Customer Support плану немає.'],
+   ['Утилізація', 'Години місяця на задачах, які вже в PAID\\CLOSE або ⛔️Definitively closed, ÷ усі години місяця. Показує, яка частина роботи вже стала грошима. Для свіжого місяця завжди низька, бо акти закривають пізніше; вона зростає, коли задачі переводять у PAID\\CLOSE.'],
+   ['Хвости', 'Незакриті задачі, створені до місяця: в роботі, на прийманні клієнтом і в DONE (зроблено, не оплачено). Години — фактичні години в цих задачах на кінець місяця.'],
+   ['Індекс', 'Індекс здоров’я напряму з дашборду IT-команд (0–100): норма, прострочки, хвости, точність оцінок.'],
+   ['Комерція', 'Усі проєкти, закріплені за менеджерами в дашборді менеджерів, без внутрішніх. Свідрук Наталя відповідає за зведений результат усіх менеджерів.'],
+   ['Наради', 'Наради 1-го і 15-го числа. Вночі перед нарадою готуються по 4 рекомендації кожному керівнику з цифрою «було → ціль». Ви відмічаєте поставлені задачі, а на наступній нараді — результат. Біля задачі видно поточне значення показника.'],
+   ['Оновлення', 'Щоночі о 02:00 з Worksection і дашборду менеджерів.']].forEach(([a, b]) => { dl.append(el('dt', null, a), el('dd', null, b)); });
+  c.append(dl); pg.append(c);
+}
+
+/* ---------- каркас ---------- */
+function setMonth(m) { S.month = m; const s = document.getElementById('msel'); if (s) s.value = m; draw(); }
+function draw() {
+  const pg = document.getElementById('page'); pg.replaceChildren();
+  document.querySelectorAll('.tab').forEach((b) => { b.setAttribute('aria-selected', b.dataset.t === S.tab); b.querySelectorAll('.badge').forEach((x) => x.remove()); });
+  const mtTab = document.getElementById('tab-mt'); const prevOpen = S.meetings.reduce((a, mt) => a + (mt.items || []).filter((it) => { const k = markOf(mt.date, it.id); return k.assigned && !k.status; }).length, 0);
+  if (prevOpen) { const b = el('span', 'badge', String(prevOpen)); b.title = 'Поставлені задачі без результату'; mtTab.append(b); }
+  if (S.err) { pg.append(el('div', 'banner', S.err)); }
+  if (!S.L.length) { if (!S.err) pg.append(el('p', 'muted', 'Завантаження даних…')); return; }
+  if (S.tab === 'mt') meetingsPage(pg); else if (S.tab === 'how') howPage(pg); else overview(pg);
+}
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; try { localStorage.setItem('ow_tab', S.tab); } catch (e) {} draw(); }));
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(draw, 200); });
+
+async function load(meta) {
+  const U = (meta && meta.urls) || {};
+  const get = async (k) => { if (!U[k]) throw new Error('немає файлу ' + k); const r = await fetch(U[k]); if (!r.ok) throw new Error(k + ' ' + r.status); return r.json(); };
+  const [L, M, G, A] = await Promise.all([get('leaders'), get('months'), get('managers'), get('about')]);
+  S.L = L; S.M = M; S.G = G; S.A = A[0];
+  const sel = document.getElementById('msel'); const months = (S.A.months || [...new Set(L.map((r) => r.month))]).slice().sort().reverse();
+  sel.replaceChildren(...months.map((m) => new Option(mf(m) + (m === S.A.month ? ' (поточний)' : ''), m)));
+  if (!S.month || !months.includes(S.month)) S.month = S.A.month;
+  sel.value = S.month; sel.onchange = () => setMonth(sel.value);
+  document.getElementById('asof').textContent = 'Дані на ' + dd(S.A.date) + ' · оновлюються щоночі о 02:00';
+  draw();
+}
+(async () => {
+  try {
+    const cl = window.claude; const db = cl && cl.use ? await cl.use('db') : null;
+    if (!db) { S.err = 'Дані не завантажились: відкрийте дашборд, увійшовши у свій акаунт claude.ai.'; draw(); return; }
+    S.db = db;
+    db.doc('data/meta').onSnapshot((snap) => { if (snap.exists) load(snap.data()).catch((e) => { S.err = 'Не вдалося завантажити дані: ' + e.message; draw(); }); else { S.err = 'Даних ще немає — вони з’являться після нічного оновлення.'; draw(); } }, () => { S.err = 'Немає доступу до даних дашборду.'; draw(); });
+    db.collection('meetings').onSnapshot((q) => { S.meetings = q.docs.map((d) => Object.assign({date: d.id}, d.data())); draw(); }, () => {});
+    db.collection('marks').onSnapshot((q) => { const m = {}; q.docs.forEach((d) => { m[d.id] = d.data(); }); S.marks = m; draw(); }, () => {});
+  } catch (e) { S.err = 'Помилка завантаження: ' + (e && e.message || e); draw(); }
+})();
+draw();
+})();
+</script>
