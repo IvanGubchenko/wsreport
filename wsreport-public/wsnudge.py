@@ -23,8 +23,8 @@ REPEAT_WORKDAYS = 3
 PAUSE_DAYS = 15
 DONE_DAYS = 15
 DELIVERED = ("DONE", "TESTING BY CLIENT", "TESTING BY TEAM", "PAID", "CANCEL", "CLOSE", "DEFINITIVELY")
-INTRO = "🤖 Привіт, це We.bit!"
-THANKS = "🤖 We.bit задоволений: все виправлено. Дякую за роботу! 💚"
+INTRO = "Привіт, це We.bit!"
+THANKS = "We.bit задоволений: все виправлено. Дякую за роботу!"
 MIN_ENTRY_MINUTES = 10
 
 
@@ -145,7 +145,7 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
                     author = email                # автора нет — пишем исполнителю
                 active["fill:" + tid] = {"tid": tid, "rule": "fill", "who": [author],
                                          "sig": "|".join(miss) + ("|worked" if worked else ""),
-                                         "text": " ".join(parts) + " Заповни, будь ласка 🙏"}
+                                         "text": " ".join(parts) + " Заповни, будь ласка"}
         due = W.parse_date(t.get("date_end"))
         if "overdue" in rules and is_open and in_team and due and due < today and not delivered:
             who = [email]
@@ -167,7 +167,7 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
             mgr = proj_mgr.get(str(pr.get("id"))) or proj_mgr.get(pr.get("name") or "")
             if mgr:
                 active["done:" + tid] = {"tid": tid, "rule": "done", "who": [mgr], "sig": stage,
-                                         "text": "%s, задача зроблена, а гроші ще ні 🙂 Більше %d днів без PAID\\CLOSE. "
+                                         "text": "%s, задача зроблена, а гроші ще ні. Більше %d днів без PAID\\CLOSE. "
                                                  "Виставте, будь ласка, акт клієнту або напишіть у відповідь на цей коментар, "
                                                  "що заважає її закрити."
                                                  % (name_of.get(mgr) or mgr, DONE_DAYS)}
@@ -218,7 +218,7 @@ def run(ws, cfg, tasks, team, st, today, mode, holidays, test_email="", from_ema
         if only_thanks:
             text = THANKS
         else:
-            text = INTRO + "\n\n" + ("Дякую за роботу! 💚\n\n" if any(k == "thanks" for _, k in o["keys"]) else "") + "\n\n".join(body)
+            text = INTRO + "\n\n" + ("Дякую за роботу!\n\n" if any(k == "thanks" for _, k in o["keys"]) else "") + "\n\n".join(body)
         ok = True
         if mode != "dry":
             params = {"id_task": tid, "text": text, "mention": ",".join(o["who"])}
