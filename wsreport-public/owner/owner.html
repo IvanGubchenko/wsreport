@@ -59,6 +59,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .leaders{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr))}
 .lc.wide{grid-column:1/-1;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);column-gap:22px;align-items:start}
 .lc.wide>.who,.lc.wide>.foot{grid-column:1/-1}
+.lc.wide.eng{display:block}.lc.wide.eng>*+*{margin-top:10px}.lc.wide.eng .kv{max-width:640px}
 @media (max-width:900px){.lc.wide{grid-template-columns:1fr}}
 .lc{gap:14px}
 .lc .who{display:flex;gap:12px;align-items:center;min-width:0}
@@ -88,6 +89,7 @@ tbody tr:last-child td{border-bottom:0}
 th:first-child,td:first-child,td.l{text-align:left}
 td .who2{display:flex;gap:10px;align-items:center}
 td .who2 .ava{width:28px;height:28px;font-size:11px}
+td .tsub{display:block;color:var(--muted);font-size:12px;font-weight:400}
 td .who2 span.ar{display:block;color:var(--muted);font-size:12px;white-space:normal}
 .cellbar{display:inline-flex;align-items:center;gap:8px;justify-content:flex-end}
 .cellbar i{display:inline-block;height:6px;border-radius:3px;background:var(--ref);opacity:.5}
@@ -108,6 +110,7 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
 .rec .rh{display:flex;gap:10px;align-items:flex-start}
 .rec .num{flex:none;width:22px;height:22px;border-radius:50%;background:var(--soft);border:1px solid var(--line);display:grid;place-items:center;font-size:11.5px;font-weight:600;color:var(--muted)}
 .rec .tx{font-size:13.5px}
+.lc .tag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-top:4px}
 .rec .tag{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;display:block;margin-bottom:2px}
 .prog{display:grid;gap:4px;font-size:12px;color:var(--muted);padding-left:32px}
 .prog .nums{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
@@ -133,6 +136,8 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
     </div>
     <nav class="tabs" role="tablist" id="tabs">
       <button class="tab" role="tab" data-t="ov" id="tab-ov">Огляд</button>
+      <button class="tab" role="tab" data-t="tl" id="tab-tl">Хвости</button>
+      <button class="tab" role="tab" data-t="en" id="tab-en">Залученість</button>
       <button class="tab" role="tab" data-t="mt" id="tab-mt">Наради й задачі</button>
       <button class="tab" role="tab" data-t="how" id="tab-how">Як рахується</button>
     </nav>
@@ -143,7 +148,7 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
 (() => {
 const S = {tab: 'ov', month: '', L: [], M: [], G: [], A: null, meetings: [], marks: {}, mt: '', db: null, me: null, err: ''};
 try { const t = localStorage.getItem('ow_tab'); if (t) S.tab = t; } catch (e) {}
-if (['ov', 'mt', 'how'].includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
+if (['ov', 'tl', 'en', 'mt', 'how'].includes(location.hash.slice(1))) S.tab = location.hash.slice(1);
 const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
 const nf = new Intl.NumberFormat('uk-UA', {maximumFractionDigits: 0});
 const N = (v) => v == null ? '—' : nf.format(v), H = (v) => v == null ? '—' : nf.format(v) + ' год', P = (v) => v == null ? '—' : v + '%';
@@ -357,6 +362,166 @@ function miniUtil(box, key) {
     const t = svgEl('text', {x: x + w / 2, y: H - 4, 'text-anchor': 'middle', 'font-size': 11, fill: sel ? 'var(--ink)' : 'var(--muted)', 'font-weight': sel ? 700 : 400}); t.textContent = MS[+r.month.slice(5, 7) - 1]; svg.append(t); });
 }
 
+/* ---------- хвости ---------- */
+const STG = [['done_h', 'DONE', 'var(--bad)'], ['test_h', 'TESTING BY CLIENT', 'var(--warn)'], ['work_h', 'В роботі', 'var(--ref)']];
+function tailsPage(pg) {
+  const m = S.month; const R = (S.T || []).filter((r) => r.month === m);
+  if (!R.length) { pg.append(el('p', 'muted', 'Для ' + mf(m) + ' немає знімка хвостів. Знімки є з жовтня 2026.')); return; }
+  const sum = (k, rs = R) => rs.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+  const hasFlow = R.some((r) => r.start_h != null); const pm = before(m);
+  const lede = el('div', 'lede'); lede.append(el('span', 'when', mf(m) + (m === cur() ? ' · на ' + dd(S.A.date) : ' · кінець місяця')));
+  lede.append(el('p', null, 'Хвости — ' + N(sum('h')) + ' год у ' + N(sum('n')) + ' задачах по ' + R.length + ' проєктах' + (hasFlow ? '. З кінця ' + mg(pm) + ' ' + (sum('h') - sum('start_h') > 0 ? 'зросли на ' : 'зменшились на ') + N(Math.abs(Math.round(sum('h') - sum('start_h')))) + ' год: закрито ' + N(sum('closed_h')) + ', додалось ' + N(sum('new_h')) + ' з задач ' + mg(pm) + '.' : '.')));
+  pg.append(lede);
+
+  // 1. рух за місяць
+  if (hasFlow) {
+    const s = el('section', 'sec'); s.append(secHead('Рух хвостів за місяць', 'Звідки взялась різниця між кінцем ' + mg(pm) + ' і ' + (m === cur() ? 'сьогодні' : 'кінцем ' + mg(m))));
+    const c = el('div', 'card'); const steps = [['На кінець ' + mg(pm), sum('start_h'), 'base'], ['Закрито (PAID\\CLOSE)', -sum('closed_h'), 'good'], ['Нові хвости з задач ' + mg(pm), sum('new_h'), 'bad'], ['Дописані години в старих', sum('growth_h'), sum('growth_h') > 0 ? 'bad' : 'good'], [m === cur() ? 'Зараз' : 'На кінець ' + mg(m), sum('h'), 'base']];
+    c.append(waterfall(steps)); s.append(c); pg.append(s);
+  }
+  // 2. по місяцях створення
+  const cms = [...new Set(R.flatMap((r) => Object.keys(r.by_cm || {})))].sort();
+  const s2 = el('section', 'sec'); s2.append(secHead('Помісячно: коли створені задачі', 'Чим старіший місяць, тим довше гроші не приходять. Закриваємо з найранішого.'));
+  const c2 = el('div', 'card'); const t = el('table'); t.innerHTML = '<thead><tr><th>Місяць створення</th><th>Проєктів</th><th>Годин</th><th>Частка</th><th style="text-align:left">Найбільші проєкти</th></tr></thead>';
+  const tb = el('tbody'); const tot = sum('h') || 1;
+  cms.forEach((cm) => { const rs = R.filter((r) => (r.by_cm || {})[cm]); const h = rs.reduce((a, r) => a + r.by_cm[cm], 0);
+    const tr = el('tr'); tr.append(el('td', 'l', mf(cm)), el('td', null, N(rs.length)));
+    const tc = el('td'); const cb = el('span', 'cellbar'); const bi = el('i'); bi.style.width = Math.round(80 * h / tot) + 'px'; bi.style.opacity = '.8'; bi.style.background = 'var(--bad)'; cb.append(bi, N(h)); tc.append(cb); tr.append(tc);
+    tr.append(el('td', null, Math.round(h / tot * 100) + '%'));
+    const top = rs.sort((a, b) => b.by_cm[cm] - a.by_cm[cm]).slice(0, 3).map((r) => r.project + ' ' + N(r.by_cm[cm])).join(' · '); const td = el('td', 'l muted', top); td.style.whiteSpace = 'normal'; td.style.minWidth = '24ch'; tr.append(td);
+    tb.append(tr); });
+  t.append(tb); const w = el('div', 'tw'); w.append(t); c2.append(w);
+  const st = el('div', 'kv'); STG.forEach(([k, l]) => st.append(el('span', null, l), el('b', null, H(sum(k)) + ' · ' + Math.round(sum(k) / tot * 100) + '%'))); c2.append(el('h3', null, 'За етапом зараз'), st);
+  s2.append(c2); pg.append(s2);
+
+  // 3. по проєктах
+  const s3 = el('section', 'sec'); s3.append(secHead('По проєктах', 'Години хвостів за місяцем створення, етап і динаміка за місяць. Натисніть заголовок, щоб сортувати.'));
+  const c3 = el('div', 'card'); const bar = el('div', 'acts'); bar.style.paddingLeft = '0';
+  const q = el('input'); q.type = 'text'; q.id = 'tq'; q.placeholder = 'Пошук проєкту або менеджера'; q.value = S.tq || ''; q.style.cssText = 'flex:1 1 220px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--soft)';
+  const mgS = el('select'); mgS.id = 'tmg'; mgS.append(new Option('Усі менеджери', ''), ...[...new Set(R.map((r) => r.manager || ''))].sort().map((x) => new Option(x || 'Не закріплені', x || '—')));
+  mgS.value = S.tmg || '';
+  bar.append(q, mgS); c3.append(bar);
+  const cols = [['project', 'Проєкт', 'l'], ['manager', 'Менеджер', 'l']].concat(cms.map((cm) => ['cm:' + cm, ms(cm)])).concat([['h', 'Усього'], ['done_h', 'DONE'], ['test_h', 'TESTING'], ['work_h', 'В роботі']]).concat(hasFlow ? [['start_h', 'Кін. ' + MS[+pm.slice(5, 7) - 1]], ['closed_h', 'Закрито'], ['new_h', 'Нові'], ['delta', 'Динаміка']] : []);
+  const tw = el('div', 'tw'); c3.append(tw);
+  const val = (r, k) => k.startsWith('cm:') ? ((r.by_cm || {})[k.slice(3)] || 0) : r[k];
+  const paint = () => {
+    const f = (S.tq || '').toLowerCase(); let rs = R.filter((r) => (!f || (r.project + ' ' + r.manager).toLowerCase().includes(f)) && (!S.tmg || (r.manager || '—') === S.tmg));
+    const sk = S.tsort || 'h', dir = S.tdir || -1; rs = rs.slice().sort((a, b) => { const x = val(a, sk), y = val(b, sk); return typeof x === 'string' ? dir * String(x).localeCompare(String(y), 'uk') : dir * ((x || 0) - (y || 0)); });
+    const t3 = el('table'); const hr = el('tr'); cols.forEach(([k, l, cls]) => { const th = el('th', cls || '', l + (S.tsort === k || (!S.tsort && k === 'h') ? (dir < 0 ? ' ↓' : ' ↑') : '')); th.style.cursor = 'pointer'; th.setAttribute('aria-sort', (sk === k) ? (dir < 0 ? 'descending' : 'ascending') : 'none'); th.onclick = () => { S.tdir = S.tsort === k ? -(S.tdir || -1) : -1; S.tsort = k; paint(); }; hr.append(th); });
+    const th0 = el('thead'); th0.append(hr); t3.append(th0); const b = el('tbody'); const maxD = Math.max(1, ...rs.map((r) => Math.abs(r.delta || 0)));
+    const all = rs; if (!S.tall) rs = rs.slice(0, 30);
+    rs.forEach((r) => { const tr = el('tr'); cols.forEach(([k, , cls]) => { const v = val(r, k); let td;
+      if (k === 'project') { td = el('td', 'l'); td.append(el('b', null, r.project), el('span', 'tsub', N(r.n) + ' задач')); td.style.whiteSpace = 'normal'; td.style.minWidth = '22ch'; }
+      else if (k === 'manager') td = el('td', 'l muted', r.manager || 'Не закріплені');
+      else if (k === 'delta') { td = el('td', v > 0 ? 'bad' : v < 0 ? 'good' : 'mut'); const cb = el('span', 'cellbar'); const bi = el('i'); bi.style.width = Math.round(50 * Math.abs(v || 0) / maxD) + 'px'; bi.style.background = v > 0 ? 'var(--bad)' : 'var(--ok)'; bi.style.opacity = '.7'; cb.append(bi, v == null ? '—' : SG(Math.round(v)).replace(' год', '')); td.append(cb); }
+      else if (k === 'closed_h') td = el('td', v ? 'good' : 'mut', v ? '−' + N(v) : '—');
+      else if (k === 'new_h') td = el('td', v ? 'bad' : 'mut', v ? '+' + N(v) : '—');
+      else td = el('td', (k === 'done_h' && v > 50) ? 'warn' : (!v ? 'mut' : ''), v ? N(v) : '—');
+      if (k === 'h') td.style.fontWeight = '600';
+      tr.append(td); }); b.append(tr); });
+    const tf = el('tr'); cols.forEach(([k, , cls]) => { const td = el('td', cls || ''); td.style.fontWeight = '600'; if (k === 'project') td.textContent = 'Разом: ' + all.length + ' проєктів'; else if (k !== 'manager') { const v = all.reduce((a, r) => a + (Number(val(r, k)) || 0), 0); td.textContent = k === 'delta' ? SG(Math.round(v)).replace(' год', '') : k === 'closed_h' ? '−' + N(v) : k === 'new_h' ? '+' + N(v) : N(v); } tf.append(td); }); b.append(tf);
+    t3.append(b); tw.replaceChildren(t3);
+    if (all.length > 30) { const mb = el('button', 'asg', S.tall ? 'Показати перші 30' : 'Показати всі ' + all.length + ' проєктів'); mb.type = 'button'; mb.style.marginTop = '10px'; mb.onclick = () => { S.tall = !S.tall; paint(); }; tw.append(mb); }
+  };
+  q.oninput = () => { S.tq = q.value; paint(); }; mgS.onchange = () => { S.tmg = mgS.value; paint(); };
+  paint(); s3.append(c3); pg.append(s3);
+  pg.append(el('p', 'note', 'Хвости — незакриті задачі (не PAID\\CLOSE), створені до місяця, з фактичними годинами; внутрішні проєкти не входять. «Нові» — задачі минулого місяця, які на кінець місяця ще не оплачені. «Закрито» — хвости, що перейшли в PAID\\CLOSE. Знімки є з жовтня 2026, тому рух показано з листопада.'));
+}
+function waterfall(steps) {
+  const W = 760, HH = 250, m = {l: 10, r: 10, t: 26, b: 52}; const svg = svgEl('svg', {width: '100%', viewBox: `0 0 ${W} ${HH}`, role: 'img', 'aria-label': 'Рух хвостів'}); svg.style.maxWidth = '860px'; svg.style.margin = '0 auto';
+  let run = 0; const pts = steps.map(([l, v, kind], i) => { let a, b; if (kind === 'base') { a = 0; b = v; run = v; } else { a = run; b = run + v; run = b; } return {l, v, kind, a, b}; });
+  const max = Math.max(...pts.map((p) => Math.max(p.a, p.b))) * 1.08 || 1; const y = (v) => HH - m.b - (HH - m.t - m.b) * v / max;
+  const bw = (W - m.l - m.r) / pts.length, w = Math.min(90, bw * 0.55);
+  svg.append(svgEl('line', {x1: m.l, x2: W - m.r, y1: y(0), y2: y(0), stroke: 'var(--line)'}));
+  pts.forEach((p, i) => { const x = m.l + bw * i + (bw - w) / 2; const top = y(Math.max(p.a, p.b)), h = Math.max(2, Math.abs(y(p.a) - y(p.b)));
+    const col = p.kind === 'base' ? 'var(--acc)' : p.kind === 'good' ? 'var(--ok)' : 'var(--bad)';
+    svg.append(svgEl('rect', {x, width: w, y: top, height: h, rx: 4, fill: col, opacity: p.kind === 'base' ? 0.9 : 0.75}));
+    if (i < pts.length - 1) svg.append(svgEl('line', {x1: x + w, x2: x + bw, y1: y(p.b), y2: y(p.b), stroke: 'var(--ref)', 'stroke-dasharray': '3 3'}));
+    const v = svgEl('text', {x: x + w / 2, y: top - 7, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 600, fill: 'var(--ink)'}); v.textContent = p.kind === 'base' ? N(p.v) : (p.v > 0 ? '+' : '−') + N(Math.abs(p.v)); svg.append(v);
+    const words = p.l.split(' '); let line = '', lines = []; words.forEach((wd) => { if ((line + ' ' + wd).trim().length > 16) { lines.push(line.trim()); line = wd; } else line += ' ' + wd; }); lines.push(line.trim());
+    lines.slice(0, 3).forEach((ln, k) => { const t = svgEl('text', {x: x + w / 2, y: HH - m.b + 18 + k * 14, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--muted)'}); t.textContent = ln; svg.append(t); }); });
+  return svg;
+}
+
+/* ---------- залученість ---------- */
+const AREAS = {
+  direction: [['paid', 'Оплата: переводять у PAID\\CLOSE', 'год'], ['tails_done_h', 'DONE-хвости: акти й оплата', 'год'], ['test_h', 'Приймання клієнтом (TESTING BY CLIENT)', 'год'], ['overdue', 'Прострочені задачі', ''], ['nostage', 'Задачі без етапу', ''], ['pause', 'Задачі на PAUSE', ''], ['nopay', 'Без типу оплати', ''], ['noest', 'Без оцінки часу', ''], ['tasks', 'Задачі з нарад', '']],
+  commerce: [['paid', 'Оплата: переводять у PAID\\CLOSE', 'год'], ['tails_done_h', 'DONE-хвости: акти й оплата', 'год'], ['test_h', 'Приймання клієнтом (TESTING BY CLIENT)', 'год'], ['nocontact', 'DONE без контактної особи', ''], ['nopay', 'Без типу оплати (DONE/TESTING)', ''], ['unassigned', 'Проєкти без менеджера', ''], ['tasks', 'Задачі з нарад', '']],
+};
+function series(key, field) { // [{date, v}] з історії: hist.json, нічні знімки eng, сьогоднішній hyg
+  const pts = {};
+  (S.Hs || []).filter((r) => r.key === key && r[field] != null).forEach((r) => { pts[r.date] = r[field]; });
+  (S.eng || []).forEach((d) => { const r = (d.rows || []).find((x) => x.key === key); if (r && r[field] != null) pts[d.date] = r[field]; });
+  const t = (S.Hy || []).find((r) => r.key === key); if (t && t[field] != null) pts[t.date] = t[field];
+  return Object.keys(pts).sort().map((d) => ({date: d, v: pts[d]}));
+}
+function periodStart() {
+  const today = S.A.date; const d = new Date(today + 'T00:00:00Z'); const iso = (x) => x.toISOString().slice(0, 10);
+  if (S.ep === '7') { d.setUTCDate(d.getUTCDate() - 7); return iso(d); }
+  if (S.ep === '14') { d.setUTCDate(d.getUTCDate() - 14); return iso(d); }
+  if (S.ep === 'm') return today.slice(0, 8) + '01';
+  const past = S.meetings.map((x) => x.date).filter((x) => x < today).sort(); return past.length ? past[past.length - 1] : today.slice(0, 8) + '01';
+}
+function areaState(key, field, from) {
+  if (field === 'paid') { const rs = (S.Pd || []).filter((r) => r.key === key && r.date >= from); const h = rs.reduce((a, r) => a + r.h, 0), n = rs.reduce((a, r) => a + r.n, 0), days = new Set(rs.map((r) => r.date)).size;
+    return {kind: h > 0 ? 'do' : 'skip', now: h, text: h > 0 ? N(h) + ' год · ' + n + ' задач · ' + days + ' дн.' : 'жодної задачі', delta: null}; }
+  if (field === 'tasks') { let n = 0, d = 0, f = 0; for (const mt of S.meetings) for (const it of (mt.items || [])) { if (it.key !== key) continue; const k = markOf(mt.date, it.id); if (!k.assigned) continue; n++; if (k.status === 'done') d++; if (k.status === 'fail') f++; }
+    return n ? {kind: d === n ? 'do' : d || !f ? 'part' : 'skip', text: d + ' з ' + n + ' виконано'} : {kind: 'none', text: 'не поставлено'}; }
+  const sr = series(key, field); if (!sr.length) return {kind: 'none', text: 'немає даних'};
+  const now = sr[sr.length - 1]; const base = [...sr].reverse().find((p) => p.date <= from) || sr[0];
+  if (base.date === now.date) return {kind: 'none', now: now.v, text: 'зараз ' + N(now.v)};
+  const dlt = now.v - base.v; const tol = Math.max(1, Math.abs(base.v) * 0.02);
+  const kind = dlt <= -tol ? 'do' : dlt >= tol ? 'worse' : (now.v === 0 ? 'do' : 'skip');
+  return {kind, now: now.v, delta: dlt, text: N(base.v) + ' → ' + N(now.v) + ' (' + (dlt > 0 ? '+' : dlt < 0 ? '−' : '±') + N(Math.abs(dlt)) + ')', since: base.date};
+}
+const KIND = {do: ['робить', 'good'], part: ['частково', 'warn'], skip: ['пропускає', 'mut'], worse: ['погіршення', 'bad'], none: ['—', 'mut']};
+function engPage(pg) {
+  const from = periodStart();
+  const head = el('div', 'mt-head'); const l = el('div'); l.append(el('h2', null, 'Залученість керівників'), el('p', 'note', 'Що змінилось у даних кожного керівника з ' + dd(from) + ' по ' + dd(S.A.date) + ': де вони працюють, а що стоїть без змін.'));
+  const sel = el('select'); sel.id = 'esel'; [['meet', 'З останньої наради'], ['7', 'Останні 7 днів'], ['14', 'Останні 14 днів'], ['m', 'З початку місяця']].forEach(([v, t]) => sel.append(new Option(t, v))); sel.value = S.ep || 'meet'; sel.onchange = () => { S.ep = sel.value; draw(); };
+  head.append(l, sel); pg.append(head);
+  const res = {};
+  const keys = ['marina', 'anna', 'svitlana', 'lcw', 'natalia'];
+  keys.forEach((k) => { const kind = k === 'natalia' ? 'commerce' : 'direction'; res[k] = AREAS[kind].map(([f, t, u]) => Object.assign({f, t, u}, areaState(k, f, from))); });
+  // зведення
+  const sc = (k) => { const a = res[k].filter((x) => x.kind !== 'none'); const d = a.filter((x) => x.kind === 'do').length + 0.5 * a.filter((x) => x.kind === 'part').length; return a.length ? Math.round(d / a.length * 100) : null; };
+  const c = el('div', 'card'); const t = el('table'); const hr = el('tr'); hr.append(el('th', null, 'Керівник'), el('th', null, 'Залученість'));
+  AREAS.direction.forEach(([, tt]) => { const th = el('th', null, tt.split(':')[0].replace('Задачі ', '').replace('Приймання клієнтом (TESTING BY CLIENT)', 'TESTING')); hr.append(th); });
+  const th0 = el('thead'); th0.append(hr); t.append(th0); const tb = el('tbody');
+  keys.forEach((k) => { const tr = el('tr'); const f = el('td'); const w = el('div', 'who2'); const nm = el('div'); nm.append(el('b', null, NAMES[k])); w.append(ava(k), nm); f.append(w); tr.append(f);
+    const v = sc(k); tr.append(el('td', null)); tr.lastChild.append(el('span', 'pill ' + (v == null ? 'mut' : v >= 60 ? 'good' : v >= 30 ? 'warn' : 'bad'), v == null ? '—' : v + '%'));
+    AREAS.direction.forEach(([fld]) => { const a = res[k].find((x) => x.f === fld) || (fld === 'pause' || fld === 'nostage' || fld === 'noest' || fld === 'overdue' ? res[k].find((x) => x.f === ({overdue: 'nocontact', nostage: 'unassigned'})[fld]) : null); const td = el('td');
+      if (!a) { td.textContent = '·'; td.className = 'mut'; } else { const [lbl, cls] = KIND[a.kind]; td.append(el('span', cls, a.kind === 'do' ? '✓' : a.kind === 'worse' ? '▲' : a.kind === 'part' ? '◐' : a.kind === 'skip' ? '○' : '·')); td.title = a.t + ': ' + a.text + ' — ' + lbl; }
+      tr.append(td); });
+    tb.append(tr); });
+  t.append(tb); const tw = el('div', 'tw'); tw.append(t); c.append(tw);
+  c.append(el('p', 'note', '✓ робить — показник покращився · ○ пропускає — без змін · ▲ погіршення · ◐ частково · · — немає бази. Залученість — частка напрямів, де є покращення. Для комерції колонки «Прострочені» і «Без етапу» — це «DONE без контакту» і «Проєкти без менеджера».'));
+  const s1 = el('section', 'sec'); s1.append(secHead('Зведено', null), c); pg.append(s1);
+  // активність по днях
+  const s2 = el('section', 'sec'); s2.append(secHead('Оплата по днях', 'Години задач, переведених у PAID\\CLOSE за день (за датою закриття). Порожні клітинки — нічого не закрили.'));
+  const c2 = el('div', 'card'); c2.append(heat(keys)); s2.append(c2); pg.append(s2);
+  // картки
+  const s3 = el('section', 'sec'); s3.append(secHead('Що робить і що пропускає кожен', 'Значення на початок періоду → зараз'));
+  const box = el('div', 'leaders');
+  keys.forEach((k) => { const cc = el('article', 'card lc' + (k === 'natalia' ? ' wide eng' : '')); const top = el('div', 'who'); const nm = el('div', 'nm'); nm.append(el('h3', null, NAMES[k])); const v = sc(k); nm.append(el('span', 'ar', 'залученість ' + (v == null ? '—' : v + '%'))); top.append(ava(k), nm); cc.append(top);
+    const groups = [['do', 'Робить'], ['part', 'Частково'], ['worse', 'Погіршення'], ['skip', 'Пропускає'], ['none', 'Порівняння з’явиться після наступних нічних оновлень']];
+    groups.forEach(([g, gl]) => { const items = res[k].filter((x) => x.kind === g); if (!items.length) return; cc.append(el('div', 'tag ' + KIND[g][1], gl)); const kv = el('div', 'kv'); items.forEach((a) => kv.append(el('span', null, a.t), el('b', KIND[g][1], a.text))); cc.append(kv); });
+    box.append(cc); });
+  s3.append(box); pg.append(s3);
+}
+function heat(keys) {
+  const end = S.A.date; const days = []; const d = new Date(end + 'T00:00:00Z'); for (let i = 20; i >= 0; i--) { const x = new Date(d); x.setUTCDate(d.getUTCDate() - i); days.push(x.toISOString().slice(0, 10)); }
+  const val = (k, day) => (S.Pd || []).find((r) => r.key === k && r.date === day);
+  const max = Math.max(1, ...(S.Pd || []).filter((r) => days.includes(r.date)).map((r) => r.h));
+  const W = 900, rowH = 30, lw = 150, cw = (W - lw) / days.length, HH = keys.length * rowH + 30;
+  const svg = svgEl('svg', {width: '100%', viewBox: `0 0 ${W} ${HH}`, role: 'img', 'aria-label': 'Оплата по днях'}); const wrap = el('div', 'chart'); wrap.append(svg);
+  keys.forEach((k, i) => { const tx = svgEl('text', {x: 0, y: i * rowH + 19, 'font-size': 12.5, fill: 'var(--ink)'}); tx.textContent = NAMES[k]; svg.append(tx);
+    days.forEach((day, j) => { const v = val(k, day); const wd = new Date(day + 'T00:00:00Z').getUTCDay(); const r = svgEl('rect', {x: lw + j * cw + 1.5, y: i * rowH + 3, width: cw - 3, height: rowH - 6, rx: 4, fill: v ? COL[k] : (wd === 0 || wd === 6 ? 'transparent' : 'var(--soft)'), opacity: v ? 0.25 + 0.75 * Math.min(1, v.h / max) : 1, stroke: v ? 'none' : 'var(--line)'});
+      r.addEventListener('mousemove', (ev) => showTip(wrap, ev, NAMES[k] + ' · ' + dd(day), [[COL[k], 'Переведено в PAID\\CLOSE', v ? N(v.h) + ' год, ' + v.n + ' задач' : 'нічого']])); r.addEventListener('mouseleave', () => { tipOf(wrap).hidden = true; }); svg.append(r); }); });
+  days.forEach((day, j) => { if (j % 3 && j !== days.length - 1) return; const tx = svgEl('text', {x: lw + j * cw + cw / 2, y: HH - 6, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)'}); tx.textContent = day.slice(8, 10) + '.' + day.slice(5, 7); svg.append(tx); });
+  return wrap;
+}
+
 /* ---------- наради ---------- */
 const STATUS = [['done', 'Виконано', 's-done'], ['part', 'Частково', 's-part'], ['fail', 'Не виконано', 's-fail']];
 const markOf = (date, id) => S.marks[date + '_' + id] || {};
@@ -448,6 +613,8 @@ function howPage(pg) {
    ['Індекс', 'Індекс здоров’я напряму з дашборду IT-команд (0–100): норма, прострочки, хвости, точність оцінок.'],
    ['Комерція', 'Усі проєкти, закріплені за менеджерами в дашборді менеджерів, без внутрішніх. Свідрук Наталя відповідає за зведений результат усіх менеджерів.'],
    ['Наради', 'Наради 1-го і 15-го числа. Вночі перед нарадою готуються по 4 рекомендації кожному керівнику з цифрою «було → ціль». Ви відмічаєте поставлені задачі, а на наступній нараді — результат. Біля задачі видно поточне значення показника.'],
+   ['Хвости', 'Вкладка «Хвости»: помісячно за місяцем створення, по проєктах і рух за місяць — скільки закрили, скільки додалось нових.'],
+   ['Залученість', 'Порівнюємо дані кожного керівника на початок періоду (з останньої наради, 7 або 14 днів) і зараз: оплата (переведення в PAID\\CLOSE), DONE-хвости, приймання, прострочки, задачі без етапу, PAUSE, без типу оплати й оцінки, задачі з нарад. Покращилось — «робить», без змін — «пропускає». Щоночі зберігається знімок, тому історія накопичується з 04.11.2026.'],
    ['Оновлення', 'Щоночі о 02:00 з Worksection і дашборду менеджерів.']].forEach(([a, b]) => { dl.append(el('dt', null, a), el('dd', null, b)); });
   c.append(dl); pg.append(c);
 }
@@ -462,7 +629,7 @@ function draw() {
   if (prevOpen) { const b = el('span', 'badge', String(prevOpen)); b.title = 'Поставлені задачі без результату'; mtTab.append(b); }
   if (S.err) { pg.append(el('div', 'banner', S.err)); }
   if (!S.L.length) { if (!S.err) pg.append(el('p', 'muted', 'Завантаження даних…')); return; }
-  if (S.tab === 'mt') meetingsPage(pg); else if (S.tab === 'how') howPage(pg); else overview(pg);
+  if (S.tab === 'mt') meetingsPage(pg); else if (S.tab === 'tl') tailsPage(pg); else if (S.tab === 'en') engPage(pg); else if (S.tab === 'how') howPage(pg); else overview(pg);
 }
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => { S.tab = b.dataset.t; try { localStorage.setItem('ow_tab', S.tab); } catch (e) {} draw(); }));
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(draw, 200); });
@@ -470,8 +637,8 @@ let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTime
 async function load(meta) {
   const U = (meta && meta.urls) || {};
   const get = async (k) => { if (!U[k]) throw new Error('немає файлу ' + k); const r = await fetch(U[k]); if (!r.ok) throw new Error(k + ' ' + r.status); return r.json(); };
-  const [L, M, G, A] = await Promise.all([get('leaders'), get('months'), get('managers'), get('about')]);
-  S.L = L; S.M = M; S.G = G; S.A = A[0];
+  const [L, M, G, A, TT, HY, PD, HS] = await Promise.all([get('leaders'), get('months'), get('managers'), get('about'), U.tails ? get('tails').catch(() => []) : Promise.resolve([]), U.hyg ? get('hyg').catch(() => []) : Promise.resolve([]), U.paid_daily ? get('paid_daily').catch(() => []) : Promise.resolve([]), U.hist ? get('hist').catch(() => []) : Promise.resolve([])]);
+  S.L = L; S.M = M; S.G = G; S.A = A[0]; S.T = TT; S.Hy = HY; S.Pd = PD; S.Hs = HS;
   S.monthsList = (S.A.months || [...new Set(L.map((r) => r.month))]).slice().sort();
   if (!S.month || !S.monthsList.includes(S.month)) S.month = S.A.month;
   renderMonths();
@@ -485,6 +652,7 @@ async function load(meta) {
     S.db = db;
     db.doc('data/meta').onSnapshot((snap) => { if (snap.exists) load(snap.data()).catch((e) => { S.err = 'Не вдалося завантажити дані: ' + e.message; draw(); }); else { S.err = 'Даних ще немає — вони з’являться після нічного оновлення.'; draw(); } }, () => { S.err = 'Немає доступу до даних дашборду.'; draw(); });
     db.collection('meetings').onSnapshot((q) => { S.meetings = q.docs.map((d) => Object.assign({date: d.id}, d.data())); draw(); }, () => {});
+    db.collection('eng').onSnapshot((q) => { S.eng = q.docs.map((d) => Object.assign({date: d.id}, d.data())); draw(); }, () => {});
     db.collection('marks').onSnapshot((q) => { const m = {}; q.docs.forEach((d) => { m[d.id] = d.data(); }); S.marks = m; draw(); }, () => {});
   } catch (e) { S.err = 'Помилка завантаження: ' + (e && e.message || e); draw(); }
 })();
