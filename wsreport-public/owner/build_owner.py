@@ -2,7 +2,7 @@
 
 Вхід: output/dash (нічна вивантажка wsreport.py), output/managers (wsmanagers.py) і список проєктів
 дашборду менеджерів (JSON-масив документів {id, data: {name, manager, internal}}, як віддає ArtifactData list).
-Вихід — папка з файлами: leaders.json (рядок на керівника й місяць), months.json, trend.json, managers.json (рядок на менеджера й місяць), about.json.
+Вихід — папка з файлами: leaders.json (рядок на керівника й місяць), months.json, trend.json, managers.json (рядок на менеджера й місяць), tails.json (хвости по проєктах і місяцях), hyg.json (порядок у задачах сьогодні), paid_daily.json, hist.json, about.json.
 
 Використання: python build_owner.py <dash_dir> <managers_dir> <projects.json> <out_dir> [snap.json]
 snap.json (необов'язково) — документ snap/<YYYY-MM> дашборду менеджерів: закріплення проєктів на кінець місяця.
@@ -230,9 +230,108 @@ def main():
                             "pct": None, "paid_h": r1(paid_t), "util": pct(paid_t, lab_t),
                             "tails_h": r1(tot("tails_h")) if has else None, "partial": m == cur})
 
+    # ---- хвости по проєктах: місяць створення, етап, рух за місяць
+    def tails_at(m):
+        """{id: (етап, години)} незакритих задач, створених до m, на кінець місяця m; None — знімка немає."""
+        if m != cur and m not in msnap:
+            return None
+        res = {}
+        for t in nonint:
+            if t.get("cm", "") >= m:
+                continue
+            st = state(t, m)
+            if st and st[0] != "PAID":
+                res[str(t["id"])] = st
+        return res
+    byid_t = {str(t["id"]): t for t in nonint}
+    tails_rows = []
+    for m in months_it:
+        end = tails_at(m)
+        if end is None:
+            continue
+        start = tails_at(before(m))
+        agg_p = {}
+        def P(pname):
+            if pname not in agg_p:
+                agg_p[pname] = {"month": m, "project": pname, "manager": owner(pname, m) or "", "n": 0, "h": 0.0,
+                                "done_h": 0.0, "test_h": 0.0, "work_h": 0.0, "by_cm": {},
+                                "start_h": None if start is None else 0.0, "closed_h": None if start is None else 0.0,
+                                "new_h": None if start is None else 0.0, "growth_h": None if start is None else 0.0}
+            return agg_p[pname]
+        for tid, (st, f) in end.items():
+            t = byid_t[tid]; r = P(t.get("p") or "—")
+            r["n"] += 1; r["h"] += f
+            r["done_h" if st == "DONE" else "test_h" if st == "TESTING BY CLIENT" else "work_h"] += f
+            r["by_cm"][t["cm"]] = r["by_cm"].get(t["cm"], 0) + f
+            if start is not None:
+                if tid in start:
+                    r["growth_h"] += f - start[tid][1]
+                elif t.get("cm") == before(m):
+                    r["new_h"] += f
+        if start is not None:
+            for tid, (st, f) in start.items():
+                t = byid_t[tid]; r = P(t.get("p") or "—")
+                r["start_h"] += f
+                if tid not in end:
+                    r["closed_h"] += f
+        for r in agg_p.values():
+            for k in ("h", "done_h", "test_h", "work_h", "start_h", "closed_h", "new_h", "growth_h"):
+                if r[k] is not None:
+                    r[k] = r1(r[k])
+            r["by_cm"] = {k: r1(v) for k, v in sorted(r["by_cm"].items())}
+            r["delta"] = r1(r["h"] - r["start_h"]) if r["start_h"] is not None else None
+            tails_rows.append(r)
+
+    # ---- залученість: порядок у задачах сьогодні (знімок) і переведення в PAID\CLOSE по днях
+    et = [r for r in load(dash_dir, "emp_tasks") if r["month"] == cur]
+    base_stage = lambda st: (st or "").replace("(ІТС)", "").replace("(ИТС)", "").strip().upper()
+    hyg = []
+    for L in LEADERS:
+        rs = {r["url"]: r for r in et if r["department"] in L["depts"]}.values()
+        op = [r for r in rs if r["state"] == "Открыта"]
+        a_ = agg(L, cur) or {}
+        dr = [dep_row[(d, cur)] for d in L["depts"] if (d, cur) in dep_row]
+        hyg.append({"key": L["key"], "date": today,
+                    "nostage": sum(1 for r in op if not base_stage(r["stage"])),
+                    "pause": sum(1 for r in op if base_stage(r["stage"]) in ("PAUSE", "PAUSED")),
+                    "nopay": sum(1 for r in rs if not r.get("pay") and base_stage(r["stage"]) != "CANCELLED"),
+                    "noest": sum(1 for r in op if not r.get("plan_hours") and base_stage(r["stage"]) in ("PLANNED", "APPROVED", "UNDER APPROVAL", "IN PROGRESS")),
+                    "overdue": a_.get("overdue"), "tails_h": r1(a_.get("tails_h")), "tails_done_h": r1(a_.get("tails_done_h")),
+                    "test_h": r1(sum(f for tid, (st_, f) in (tails_at(cur) or {}).items() if st_ == "TESTING BY CLIENT" and dep_of.get(byid_t[tid].get("e")) in L["depts"])),
+                    "at_risk": a_.get("at_risk")})
+    ct = tails_at(cur) or {}
+    hyg.append({"key": COMMERCE["key"], "date": today,
+                "unassigned": sum(1 for p in pm if p not in internal and not assign.get(p) and pm[p].get(cur)),
+                "nopay": sum(1 for tid, (st_, f) in ct.items() if st_ in ("DONE", "TESTING BY CLIENT") and not byid_t[tid].get("pay")),
+                "nocontact": sum(1 for tid, (st_, f) in ct.items() if st_ == "DONE" and not byid_t[tid].get("ct")),
+                "tails_h": r1(sum(f for st_, f in ct.values())), "tails_done_h": r1(sum(f for st_, f in ct.values() if st_ == "DONE")),
+                "test_h": r1(sum(f for st_, f in ct.values() if st_ == "TESTING BY CLIENT"))})
+    paid_daily = defaultdict(lambda: [0.0, 0])
+    since = before(before(cur)) + "-01"
+    for t in nonint:
+        c = (t.get("closed") or "")[:10]
+        if t.get("s") != "PAID" or c < since:
+            continue
+        d = dep_of.get(t.get("e"))
+        for L in LEADERS:
+            if d in L["depts"]:
+                paid_daily[(L["key"], c)][0] += t.get("f") or 0; paid_daily[(L["key"], c)][1] += 1
+        if owner(t.get("p")):
+            paid_daily[("natalia", c)][0] += t.get("f") or 0; paid_daily[("natalia", c)][1] += 1
+    paid_rows = [{"key": k, "date": d, "h": r1(v[0]), "n": v[1]} for (k, d), v in sorted(paid_daily.items())]
+    # історія по днях із history.json (прострочки, хвости) — для керівників напрямів
+    hist_rows = []
+    for L in LEADERS:
+        for day in sorted({r["date"] for r in hist}):
+            rs = [r for r in hist if r["date"] == day and r.get("kind") == "department" and r.get("department") in L["depts"]]
+            if rs:
+                hist_rows.append({"key": L["key"], "date": day, "overdue": int(sum(r.get("overdue") or 0 for r in rs)),
+                                  "tails_h": r1(sum((r.get("old_open_hours") or 0) + (r.get("old_done_hours") or 0) for r in rs)),
+                                  "tails_done_h": r1(sum(r.get("old_done_hours") or 0 for r in rs)), "closed": int(sum(r.get("closed_mtd") or 0 for r in rs))})
+
     about = [{"date": today, "month": cur, "prev_month": prev, "months": months_it, "generated": dt.datetime.now().isoformat(timespec="seconds"),
               "export": tk.get("generated") or ""}]
-    for name, data in (("leaders", leaders), ("months", months_rows), ("trend", trend), ("managers", rows), ("about", about)):
+    for name, data in (("leaders", leaders), ("months", months_rows), ("trend", trend), ("managers", rows), ("tails", tails_rows), ("hyg", hyg), ("paid_daily", paid_rows), ("hist", hist_rows), ("about", about)):
         with open(os.path.join(out_dir, name + ".json"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     print("рядків керівників:", len(leaders), "· місяців:", len(all_months), "· менеджерів:", len(rows), "· дата:", today)
