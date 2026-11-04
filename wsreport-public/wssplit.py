@@ -247,7 +247,7 @@ def main():
         ask = OrderedDict((e, v) for e, v in ask.items() if v)
         asked = 0
         if ask:
-            parts = ["🤖 Привіт, це We.bit! Знайшов записи часу без опису робіт:"]
+            parts = ["Привіт, це We.bit! Знайшов записи часу без опису робіт:"]
             for e, v in ask.items():
                 if len(ask) > 1:
                     parts.append(users.get(e) or e)
