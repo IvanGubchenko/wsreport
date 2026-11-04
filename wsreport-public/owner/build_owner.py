@@ -329,9 +329,43 @@ def main():
                                   "tails_h": r1(sum((r.get("old_open_hours") or 0) + (r.get("old_done_hours") or 0) for r in rs)),
                                   "tails_done_h": r1(sum(r.get("old_done_hours") or 0 for r in rs)), "closed": int(sum(r.get("closed_mtd") or 0 for r in rs))})
 
+    # ---- пресейли: задачі проєкту ADM_Пресейл (верхній рівень), підказка можливого виграшу
+    import re as _re
+    pre = [t for t in tasks if (t.get("p") or "") == "ADM_Пресейл"]
+    pre_ids = {str(t["id"]) for t in pre}
+    STOPW = {"аналіз", "оцінка", "оцінки", "зустріч", "підготовка", "перша", "підбір", "рішення", "доопрацювання", "обговорення",
+             "вимог", "системи", "передпродажні", "переговори", "передпродаж", "презентація", "демо", "інтеграції", "інтеграція",
+             "обміну", "робіт", "збір", "інфо", "група", "груп", "україна", "компані", "лід", "надати", "запит", "автоматизацію",
+             "складу", "центр", "обласний", "перевірте", "роботу", "бази", "базою", "модуля", "клієнт", "клієнтом", "новий", "розробки", "підключення",
+             "завантаження", "номенклатури", "впровадження", "демонстраці"}
+    allpm = load(mgr_dir, "pm").get("all", {})
+    presale = []
+    for t in pre:
+        if t.get("par") and str(t["par"]) in pre_ids:
+            continue
+        kids = [x for x in pre if str(x.get("par")) == str(t["id"])]
+        head = _re.split(r"[._\-–:(]", t.get("t") or "")[0]
+        ws = [w for w in _re.findall(r"[A-Za-zА-Яа-яЇїІіЄєҐґ]{5,}", head) if w.lower() not in STOPW]
+        hint = None
+        for w in ws[:3]:
+            best = None
+            for pn, mm in allpm.items():
+                if pn == "ADM_Пресейл" or pn in internal or w.lower() not in pn.lower():
+                    continue
+                after = sum(v for m_, v in mm.items() if m_ >= (t.get("cm") or ""))
+                if after >= 5 and (not best or after > best[1]):
+                    best = (pn, after)
+            if best:
+                hint = {"project": best[0], "h": r1(best[1])}
+                break
+        presale.append({"id": str(t["id"]), "u": t.get("u"), "title": t.get("t"), "added": t.get("added"), "cm": t.get("cm"),
+                        "closed": t.get("closed"), "stage": t.get("st") or "", "state": t.get("s"), "who": t.get("e") or "",
+                        "h": r1((t.get("f") or 0) + sum(k.get("f") or 0 for k in kids)), "kids": len(kids), "hint": hint})
+    presale.sort(key=lambda r: r["added"] or "", reverse=True)
+
     about = [{"date": today, "month": cur, "prev_month": prev, "months": months_it, "generated": dt.datetime.now().isoformat(timespec="seconds"),
               "export": tk.get("generated") or ""}]
-    for name, data in (("leaders", leaders), ("months", months_rows), ("trend", trend), ("managers", rows), ("tails", tails_rows), ("hyg", hyg), ("paid_daily", paid_rows), ("hist", hist_rows), ("about", about)):
+    for name, data in (("leaders", leaders), ("months", months_rows), ("trend", trend), ("managers", rows), ("tails", tails_rows), ("hyg", hyg), ("paid_daily", paid_rows), ("hist", hist_rows), ("presale", presale), ("about", about)):
         with open(os.path.join(out_dir, name + ".json"), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     print("рядків керівників:", len(leaders), "· місяців:", len(all_months), "· менеджерів:", len(rows), "· дата:", today)
