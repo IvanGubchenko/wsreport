@@ -109,9 +109,9 @@ select{padding:7px 10px;border:1px solid var(--line);border-radius:9px;backgroun
 .mrow{grid-template-columns:minmax(150px,180px) minmax(0,1fr);column-gap:18px;align-items:start}
 .mside{display:grid;gap:10px;align-content:start;position:sticky;top:8px}
 .rh-list{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(178px,1fr);gap:8px;overflow-x:auto;padding-bottom:4px}
-.res{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.rb{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:7px 4px;cursor:pointer;color:var(--muted);min-width:0}
-.rb .ic{font-size:15px;line-height:1;font-weight:700}.rb .lb{font-size:11px;line-height:1.15;text-align:center}
+.res{display:grid;grid-template-columns:1fr;gap:4px}
+.rb{display:flex;flex-direction:row;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 10px;cursor:pointer;color:var(--muted);min-width:0;width:100%;text-align:left;font-size:12.5px}
+.rb .ic{flex:none;width:16px;text-align:center;font-size:13px;line-height:1;font-weight:700}.rb .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rb:hover{border-color:var(--ink);color:var(--ink)}
 .rb.s-done[aria-pressed=true]{background:var(--ok);border-color:var(--ok);color:#fff}
 .rb.s-part[aria-pressed=true]{background:var(--warn);border-color:var(--warn);color:#fff}
