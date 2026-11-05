@@ -495,7 +495,7 @@ function periodStart() {
   if (S.ep === '14') { d.setUTCDate(d.getUTCDate() - 14); return iso(d); }
   if (S.ep === '30') { d.setUTCDate(d.getUTCDate() - 30); return iso(d); }
   if (S.ep === 'm') return today.slice(0, 8) + '01';
-  const past = S.meetings.map((x) => x.date).filter((x) => x < today).sort(); return past.length ? past[past.length - 1] : today.slice(0, 8) + '01';
+  const past = S.meetings.map((x) => heldOf(x)).filter((x) => x <= today).sort(); return past.length ? past[past.length - 1] : today.slice(0, 8) + '01';
 }
 function workdays(from, to) { const out = []; const d = new Date(from + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); const e = new Date(to + 'T00:00:00Z'); while (d <= e) { const w = d.getUTCDay(); if (w && w !== 6) out.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); } return out; }
 function prevVal(pts, day) { const ds = Object.keys(pts).filter((x) => x < day).sort(); const p = ds[ds.length - 1]; if (!p) return null; const gap = (new Date(day) - new Date(p)) / 864e5; return gap <= 4 ? pts[p] : null; }
@@ -667,8 +667,8 @@ function meetingsPage(pg) {
   if (!S.mt || !list.some((x) => x.date === S.mt)) S.mt = list[0].date;
   const mt = list.find((x) => x.date === S.mt); const prevMt = list[list.indexOf(mt) + 1];
   const head = el('div', 'mt-head');
-  const l = el('div'); l.append(el('h2', null, 'Нарада ' + dd(mt.date)), el('p', 'note', 'Період: ' + (mt.period ? mf(mt.period) : '—') + ' · дані на ' + dd(mt.data_date) + ' · наступна нарада ' + dd(next)));
-  const sel = el('select'); sel.id = 'mtsel'; sel.setAttribute('aria-label', 'Нарада'); list.forEach((x) => sel.append(new Option('Нарада ' + dd(x.date), x.date))); sel.value = S.mt; sel.onchange = () => { S.mt = sel.value; draw(); };
+  const l = el('div'); l.append(el('h2', null, 'Нарада ' + dd(heldOf(mt))), el('p', 'note', (heldOf(mt) !== mt.date ? 'за графіком ' + dd(mt.date) + ' — перенесено на робочий день · ' : '') + 'Період: ' + (mt.period ? mf(mt.period) : '—') + ' · дані на ' + dd(mt.data_date) + ' · наступна нарада ' + dd(next)));
+  const sel = el('select'); sel.id = 'mtsel'; sel.setAttribute('aria-label', 'Нарада'); list.forEach((x) => sel.append(new Option('Нарада ' + dd(heldOf(x)), x.date))); sel.value = S.mt; sel.onchange = () => { S.mt = sel.value; draw(); };
   head.append(l, sel); pg.append(head);
   pg.append(el('div', 'banner', 'Як працювати: на нараді відмітьте «Поставлено» для задач, які доручили керівнику. На наступній нараді відкрийте цю ж нараду і поставте результат — «Виконано», «Частково» або «Не виконано». Біля задачі з цифрою видно, де показник зараз і яка ціль.'));
   if (prevMt) pg.append(meetingBlock(prevMt, true));
@@ -679,7 +679,7 @@ function meetingBlock(mt, isPrev) {
   const items = mt.items || [];
   const assigned = items.filter((it) => markOf(mt.date, it.id).assigned);
   const done = assigned.filter((it) => markOf(mt.date, it.id).status === 'done').length;
-  s.append(el('h2', null, isPrev ? 'Перевірка задач з наради ' + dd(mt.date) : 'Рекомендації на цю нараду'));
+  s.append(el('h2', null, isPrev ? 'Перевірка задач з наради ' + dd(heldOf(mt)) : 'Рекомендації на цю нараду'));
   s.append(el('p', 'note', isPrev ? 'Поставлено ' + assigned.length + ' задач, виконано ' + done + '. Поставте результат по кожній.' : 'По 4 рекомендації кожному керівнику, плюс падаючі проєкти, де вони є. Поставлено: ' + assigned.length + ' з ' + items.length + '.'));
   const box = el('div', 'mrows');
   ORDER.forEach((k) => {
@@ -727,7 +727,16 @@ function recRow(mt, it, isPrev, num) {
   const sv = el('div', 'saved'); sv.id = 'sv-' + mt.date + '_' + it.id; paintSaved(sv, mt.date + '_' + it.id); r.append(sv);
   return r;
 }
-function nextMeeting() { const t = new Date(); const y = t.getFullYear(), m = t.getMonth(), d = t.getDate(); const f = (Y, M, D) => Y + '-' + String(M + 1).padStart(2, '0') + '-' + String(D).padStart(2, '0'); if (d < 15) return f(y, m, 15); return m === 11 ? f(y + 1, 0, 1) : f(y, m + 1, 1); }
+/* Робочий календар України. Під час воєнного стану (діє до 29.01.2027) святкові дні — робочі, тож вихідні лише субота й неділя.
+   Після його завершення враховуються державні свята; свято у вихідний переноситься на наступний робочий день. */
+const MARTIAL_UNTIL = '2027-01-29';
+const UA_HOLIDAYS = ['2026-12-25', '2027-01-01', '2027-03-08', '2027-05-01', '2027-05-02', '2027-05-08', '2027-06-20', '2027-06-28', '2027-07-15', '2027-08-24', '2027-10-01', '2027-12-25'];
+const isoD = (d) => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+const UA_OFF = (() => { const off = new Set(UA_HOLIDAYS); UA_HOLIDAYS.forEach((h) => { const d = new Date(h + 'T00:00:00Z'); const w = d.getUTCDay(); if (w === 0 || w === 6) { do { d.setUTCDate(d.getUTCDate() + 1); } while ([0, 6].includes(d.getUTCDay()) || off.has(isoD(d))); off.add(isoD(d)); } }); return off; })(); // свято у вихідний переноситься на наступний робочий день
+function isWorkday(iso) { const d = new Date(iso + 'T00:00:00Z'); const w = d.getUTCDay(); if (w === 0 || w === 6) return false; if (iso > MARTIAL_UNTIL && UA_OFF.has(iso)) return false; return true; }
+function heldDay(slot) { const d = new Date(slot + 'T00:00:00Z'); while (!isWorkday(isoD(d))) d.setUTCDate(d.getUTCDate() + 1); return isoD(d); }
+const heldOf = (mt) => mt.held || heldDay(mt.date);
+function nextMeeting() { const today = (S.A && S.A.date) || isoD(new Date()); const d = new Date(today.slice(0, 8) + '01T00:00:00Z'); for (let k = 0; k < 4; k++) { for (const day of ['01', '15']) { const slot = isoD(d).slice(0, 8) + day; const h = heldDay(slot); if (h > today && !S.meetings.some((x) => x.date === slot)) return h; } d.setUTCMonth(d.getUTCMonth() + 1); } return null; }
 
 function howPage(pg) {
   const c = el('div', 'card'); c.append(el('h2', null, 'Як рахуються показники'));
@@ -738,7 +747,7 @@ function howPage(pg) {
    ['Хвости', 'Незакриті задачі, створені до місяця: в роботі, на прийманні клієнтом і в DONE (зроблено, не оплачено). Години — фактичні години в цих задачах на кінець місяця.'],
    ['Індекс', 'Індекс здоров’я напряму з дашборду IT-команд (0–100): норма, прострочки, хвости, точність оцінок.'],
    ['Комерція', 'Усі проєкти, закріплені за менеджерами в дашборді менеджерів, без внутрішніх. Свідрук Наталя відповідає за зведений результат усіх менеджерів.'],
-   ['Наради', 'Наради 1-го і 15-го числа. Вночі перед нарадою готуються по 4 рекомендації кожному керівнику з цифрою «було → ціль», а де є падаючі проєкти (годин стало на 30% і більше менше, ніж за ті ж дні минулого місяця, або не стало зовсім) — п’ята: вивести проєкт на години або заархівувати в Worksection. Ви відмічаєте поставлені задачі, а на наступній нараді — результат. Біля задачі видно поточне значення показника.'],
+   ['Наради', 'Наради 1-го і 15-го числа; якщо це вихідний — у найближчий робочий день України (під час воєнного стану, до 29.01.2027, святкові дні робочі, тож переносимо лише із суботи й неділі). Вночі перед нарадою готуються по 4 рекомендації кожному керівнику з цифрою «було → ціль», а де є падаючі проєкти (годин стало на 30% і більше менше, ніж за ті ж дні минулого місяця, або не стало зовсім) — п’ята: вивести проєкт на години або заархівувати в Worksection. Ви відмічаєте поставлені задачі, а на наступній нараді — результат. Біля задачі видно поточне значення показника.'],
    ['Хвости', 'Вкладка «Хвости»: помісячно за місяцем створення, по проєктах і рух за місяць — скільки закрили, скільки додалось нових.'],
    ['Залученість', 'Індекс 0–100 за щоденною статистикою. Кожен робочий день оцінюється за тим, що реально зрушило, з вагою за впливом на гроші: оплата (переведення в PAID\\CLOSE) 40%, DONE-хвости 20%, прострочки 20%, приймання клієнтом 10%, порядок у задачах (без етапу, PAUSE, без типу оплати, без оцінки) 10%. Регулярні прострочки, що не зменшуються, дають 0, зростання — штраф. У комерції: оплата 50, DONE 25, приймання 15, порядок 10. Щоденні знімки зберігаються з 04.11.2026.'],
    ['Пресейли', 'Усі задачі проєкту ADM_Пресейл. Результат «Виграли / Програли / Ще вирішується» ставите ви або Свідрук Наталя; відсоток виграних = виграні ÷ (виграні + програні). Контроль пресейлу — постійна 5-та задача Свідрук Наталі на кожній нараді.'],
