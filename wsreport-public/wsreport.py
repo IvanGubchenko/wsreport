@@ -344,6 +344,32 @@ def load_schedule(ws, users, start, end):
     return out
 
 
+# Направление клиента — по папке проекта в Worksection (поле company проекта)
+FOLDER_DIRECTIONS = {
+    "ІТС_Супровід": "Customer Support", "ІТС_Cупровід": "Customer Support",
+    "КОРП_BAS": "BAS Solutions D&I", "Офіс Казахстан": "BAS Solutions D&I",
+    "Паливний напрямок": "Fuel Solutions", "Мобільні додатки": "Mobile",
+    "LCW": "BAS LCW", "Наші продукти": "Internal Products",
+}
+
+
+def load_project_folders(ws):
+    """{id проекта: папка, название проекта: папка} — для группировки клиентов по направлениям."""
+    out = {}
+    try:
+        data = ws.call("get_projects")
+    except WSError as e:
+        print("    ! папки проектов не получены: %s" % e)
+        return out
+    for p in data.get("data", []):
+        folder = (p.get("company") or "").strip()
+        if p.get("id") is not None:
+            out[str(p["id"])] = folder
+        if p.get("name"):
+            out.setdefault(p["name"], folder)
+    return out
+
+
 def load_tasks(ws, costs=None):
     """Задачи вместе с подзадачами. Если API не отдал подзадачи, добираем их из записей списаний
     (в каждой записи есть задача с датами создания/закрытия, статусом и тегами)."""
@@ -464,14 +490,23 @@ def build_report(users, costs, tasks, today, cfg, schedule=None, closed_month=Fa
         k = user_key(c.get("user_from"))
         if k not in emp or not d or d < prev_start or d > today:
             continue
-        proj = ((c.get("task") or {}).get("project") or {}).get("name") or "Без проекта"
+        pobj = (c.get("task") or {}).get("project") or {}
+        proj = pobj.get("name") or "Без проекта"
+        folders = cfg.get("_proj_folder") or {}
+        if folders:
+            folder = folders.get(str(pobj.get("id"))) or folders.get(proj) or ""
+            direction = FOLDER_DIRECTIONS.get(folder)
+            if not direction:
+                continue   # проект вне папок направлений (INBOX, ADM, HR…) — в таблицу клиентов не идёт
+        else:
+            direction = emp[k]["department"]   # запасной вариант, если папки не получены
         pref = proj.split("_", 1)[0].upper()
         ctype = type_names.get(pref, "Прочее")
         client = proj.split("_", 1)[1] if pref in type_names and "_" in proj else proj
         client = client.strip(" _") or proj
         h = parse_hours(c.get("time"))
-        key = (emp[k]["department"], proj)
-        r = clients.setdefault(key, {"department": emp[k]["department"], "client": client, "project": proj, "type": ctype,
+        key = (direction, proj)
+        r = clients.setdefault(key, {"department": direction, "client": client, "project": proj, "type": ctype,
                                      "hours": 0.0, "paid_hours": 0.0, "prev_same": 0.0, "prev_total": 0.0, "people": set()})
         tags = set(((c.get("task") or {}).get("tags") or {}).values()) if isinstance((c.get("task") or {}).get("tags"), dict) else set()
         if d >= month_start:
@@ -1049,6 +1084,8 @@ def main():
     print("3/3 задачи...")
     tasks = load_tasks(ws, costs)
     print("    задач: %d" % len(tasks))
+    cfg["_proj_folder"] = load_project_folders(ws)
+    print("    папок проектов: %d" % len(set(cfg["_proj_folder"].values())))
     month_end = dt.date(today.year, today.month, calendar.monthrange(today.year, today.month)[1])
     schedule = load_schedule(ws, users, today.replace(day=1), month_end)
     print("    отпуска/больничные в графике: %d сотр." % sum(1 for v in schedule.values() if v["off"]))
